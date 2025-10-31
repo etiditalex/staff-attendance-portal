@@ -23,8 +23,34 @@ app = Flask(__name__)
 env = 'development'  # Change to 'production' when deploying
 app.config.from_object(config[env])
 
-# Initialize database
+# Initialize database (with auto-table creation)
 init_db(app)
+
+# Force database initialization on startup
+with app.app_context():
+    try:
+        # Ensure all tables exist
+        db.create_all()
+        print("✅ Database tables checked/created on startup")
+        
+        # Create admin user if doesn't exist
+        admin = User.query.filter_by(email='admin@attendance.com').first()
+        if not admin:
+            admin = User(
+                name='Admin User',
+                email='admin@attendance.com',
+                phone='+1234567890',
+                department='Administration',
+                role='admin',
+                status='active'
+            )
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+            print("✅ Admin user created on startup")
+    except Exception as e:
+        print(f"⚠️ Database initialization warning: {e}")
+        # Continue anyway - tables will be created on first request
 
 # Initialize WhatsApp service
 init_whatsapp_service(app)
