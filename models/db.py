@@ -20,6 +20,10 @@ def get_db_type():
         return 'postgresql'
     return 'mysql'
 
+# PostgreSQL doesn't support ENUM like MySQL, use String for compatibility
+DB_TYPE = get_db_type()
+USE_ENUM = DB_TYPE == 'mysql'
+
 # Helper function to handle connection errors
 def get_db_session():
     """Get database session with auto-reconnect"""
@@ -39,8 +43,13 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), nullable=False)
     department = db.Column(db.String(50), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.Enum('staff', 'admin', name='user_role', create_type=False), default='staff', nullable=False)
-    status = db.Column(db.Enum('active', 'inactive', name='user_status', create_type=False), default='active', nullable=False)
+    # Use String for PostgreSQL compatibility, Enum for MySQL
+    if USE_ENUM:
+        role = db.Column(db.Enum('staff', 'admin', name='user_role'), default='staff', nullable=False)
+        status = db.Column(db.Enum('active', 'inactive', name='user_status'), default='active', nullable=False)
+    else:
+        role = db.Column(db.String(20), default='staff', nullable=False)
+        status = db.Column(db.String(20), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -95,8 +104,13 @@ class Attendance(db.Model):
     date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     login_time = db.Column(db.DateTime, nullable=True)
     logout_time = db.Column(db.DateTime, nullable=True)
-    status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote', name='attendance_status', create_type=False), default='Absent', nullable=False)
-    work_type = db.Column(db.Enum('Office', 'Remote', 'Leave', name='work_type_enum', create_type=False), default='Office', nullable=False)
+    # Use String for PostgreSQL compatibility, Enum for MySQL
+    if USE_ENUM:
+        status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote', name='attendance_status'), default='Absent', nullable=False)
+        work_type = db.Column(db.Enum('Office', 'Remote', 'Leave', name='work_type_enum'), default='Office', nullable=False)
+    else:
+        status = db.Column(db.String(20), default='Absent', nullable=False)
+        work_type = db.Column(db.String(20), default='Office', nullable=False)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -160,8 +174,13 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     message = db.Column(db.Text, nullable=False)
-    type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert', name='notification_type', create_type=False), nullable=False)
-    status = db.Column(db.Enum('pending', 'sent', 'failed', name='notification_status', create_type=False), default='pending', nullable=False)
+    # Use String for PostgreSQL compatibility, Enum for MySQL
+    if USE_ENUM:
+        type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert', name='notification_type'), nullable=False)
+        status = db.Column(db.Enum('pending', 'sent', 'failed', name='notification_status'), default='pending', nullable=False)
+    else:
+        type = db.Column(db.String(20), nullable=False)
+        status = db.Column(db.String(20), default='pending', nullable=False)
     sent_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

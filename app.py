@@ -191,10 +191,24 @@ def signup():
         except Exception as e:
             db.session.rollback()
             # Log the error for debugging
-            print(f"❌ Signup error: {str(e)}")
+            error_msg = str(e)
+            print(f"❌ Signup error: {error_msg}")
             import traceback
             traceback.print_exc()
-            flash(f'Error creating account: {str(e)}', 'danger')
+            
+            # More user-friendly error messages
+            if 'relation' in error_msg.lower() or 'table' in error_msg.lower() or 'does not exist' in error_msg.lower():
+                # Database table issue - try creating tables
+                try:
+                    db.create_all()
+                    flash('Database initialized. Please try signing up again.', 'info')
+                except:
+                    flash('Database initialization error. Please contact support.', 'danger')
+            elif 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower():
+                flash('Email already registered. Please login.', 'warning')
+                return redirect(url_for('login'))
+            else:
+                flash(f'Error creating account. Please check logs or try again. Error: {error_msg[:100]}', 'danger')
             return render_template('signup.html')
     
     return render_template('signup.html')
