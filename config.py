@@ -29,12 +29,17 @@ class Config:
     # Support both MySQL and PostgreSQL
     DB_TYPE = os.getenv('DB_TYPE', '').lower()
     
-    # Auto-detect PostgreSQL (Render PostgreSQL URLs contain 'dpg-' or 'postgres')
-    is_postgres = (DB_TYPE == 'postgresql' or 
-                  DB_TYPE == 'postgres' or
-                  'dpg-' in DB_HOST.lower() or 
-                  'postgres' in DB_HOST.lower() or
-                  DB_HOST.endswith('.render.com'))
+    # Auto-detect PostgreSQL from environment
+    # Check if DB_HOST looks like a Render PostgreSQL host (contains 'dpg-' or ends with '.render.com')
+    # OR if DB_TYPE is explicitly set to postgresql/postgres
+    db_host_lower = DB_HOST.lower() if DB_HOST else ''
+    is_postgres = (
+        DB_TYPE in ('postgresql', 'postgres') or
+        'dpg-' in db_host_lower or 
+        'postgres' in db_host_lower or
+        db_host_lower.endswith('.render.com') or
+        db_host_lower.startswith('dpg-')
+    )
     
     if is_postgres:
         # PostgreSQL connection
@@ -44,7 +49,7 @@ class Config:
         SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}"
         print(f"✅ Using PostgreSQL: {DB_HOST}/{DB_NAME}")
     else:
-        # MySQL connection (default)
+        # MySQL connection (default for local development)
         password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
         SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}?charset=utf8mb4"
         print(f"✅ Using MySQL: {DB_HOST}/{DB_NAME}")

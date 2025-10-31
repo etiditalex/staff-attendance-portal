@@ -41,6 +41,8 @@ services:
         fromDatabase:
           name: attendance-db
           property: database
+      - key: DB_TYPE
+        value: postgresql
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
