@@ -125,6 +125,22 @@ def index():
     return redirect(url_for('login'))
 
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for debugging"""
+    try:
+        # Test database connection
+        db.session.execute(text('SELECT 1'))
+        db_status = "✅ Connected"
+    except Exception as e:
+        db_status = f"❌ Error: {str(e)}"
+    
+    return jsonify({
+        'status': 'ok',
+        'database': db_status,
+        'database_uri': app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50] + '...'  # Hide password
+    })
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     """User registration page"""
@@ -190,25 +206,40 @@ def signup():
         
         except Exception as e:
             db.session.rollback()
-            # Log the error for debugging
+            # Log the error for debugging (visible in Render logs)
             error_msg = str(e)
-            print(f"❌ Signup error: {error_msg}")
+            error_type = type(e).__name__
+            
+            # Log to console (visible in Render logs)
+            print("=" * 60)
+            print("❌ SIGNUP ERROR")
+            print("=" * 60)
+            print(f"Error Type: {error_type}")
+            print(f"Error Message: {error_msg}")
+            print("=" * 60)
             import traceback
             traceback.print_exc()
+            print("=" * 60)
             
             # More user-friendly error messages
-            if 'relation' in error_msg.lower() or 'table' in error_msg.lower() or 'does not exist' in error_msg.lower():
+            if 'relation' in error_msg.lower() or 'table' in error_msg.lower() or 'does not exist' in error_msg.lower() or 'no such table' in error_msg.lower():
                 # Database table issue - try creating tables
                 try:
+                    print("Attempting to create tables...")
                     db.create_all()
+                    print("✅ Tables created, retrying signup...")
                     flash('Database initialized. Please try signing up again.', 'info')
-                except:
-                    flash('Database initialization error. Please contact support.', 'danger')
-            elif 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower():
+                except Exception as create_error:
+                    print(f"❌ Failed to create tables: {create_error}")
+                    flash(f'Database error: {str(create_error)[:200]}', 'danger')
+            elif 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower() or 'already exists' in error_msg.lower():
                 flash('Email already registered. Please login.', 'warning')
                 return redirect(url_for('login'))
+            elif 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                flash('Database connection error. Please try again in a moment.', 'warning')
             else:
-                flash(f'Error creating account. Please check logs or try again. Error: {error_msg[:100]}', 'danger')
+                # Show helpful error
+                flash(f'Error: {error_msg[:150]}', 'danger')
             return render_template('signup.html')
     
     return render_template('signup.html')
