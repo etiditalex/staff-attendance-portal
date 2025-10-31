@@ -7,9 +7,18 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import pytz
+import os
 
 # Initialize SQLAlchemy with connection pooling
 db = SQLAlchemy()
+
+# Detect database type for Enum handling
+def get_db_type():
+    """Detect if using PostgreSQL or MySQL"""
+    db_host = os.getenv('DB_HOST', '')
+    if 'postgres' in db_host.lower() or 'postgresql' in db_host.lower():
+        return 'postgresql'
+    return 'mysql'
 
 # Helper function to handle connection errors
 def get_db_session():
@@ -30,8 +39,8 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), nullable=False)
     department = db.Column(db.String(50), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.Enum('staff', 'admin'), default='staff', nullable=False)
-    status = db.Column(db.Enum('active', 'inactive'), default='active', nullable=False)
+    role = db.Column(db.Enum('staff', 'admin', name='user_role', create_type=False), default='staff', nullable=False)
+    status = db.Column(db.Enum('active', 'inactive', name='user_status', create_type=False), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -86,8 +95,8 @@ class Attendance(db.Model):
     date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     login_time = db.Column(db.DateTime, nullable=True)
     logout_time = db.Column(db.DateTime, nullable=True)
-    status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote'), default='Absent', nullable=False)
-    work_type = db.Column(db.Enum('Office', 'Remote', 'Leave'), default='Office', nullable=False)
+    status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote', name='attendance_status', create_type=False), default='Absent', nullable=False)
+    work_type = db.Column(db.Enum('Office', 'Remote', 'Leave', name='work_type_enum', create_type=False), default='Office', nullable=False)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -151,8 +160,8 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     message = db.Column(db.Text, nullable=False)
-    type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert'), nullable=False)
-    status = db.Column(db.Enum('pending', 'sent', 'failed'), default='pending', nullable=False)
+    type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert', name='notification_type', create_type=False), nullable=False)
+    status = db.Column(db.Enum('pending', 'sent', 'failed', name='notification_status', create_type=False), default='pending', nullable=False)
     sent_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

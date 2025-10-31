@@ -26,31 +26,55 @@ app.config.from_object(config[env])
 # Initialize database (with auto-table creation)
 init_db(app)
 
-# Force database initialization on startup
-with app.app_context():
+# Force database initialization on startup (with better error handling)
+def initialize_on_startup():
+    """Initialize database on app startup"""
     try:
-        # Ensure all tables exist
-        db.create_all()
-        print("✅ Database tables checked/created on startup")
-        
-        # Create admin user if doesn't exist
-        admin = User.query.filter_by(email='admin@attendance.com').first()
-        if not admin:
-            admin = User(
-                name='Admin User',
-                email='admin@attendance.com',
-                phone='+1234567890',
-                department='Administration',
-                role='admin',
-                status='active'
-            )
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            print("✅ Admin user created on startup")
+        with app.app_context():
+            # Test connection first
+            try:
+                db.session.execute(text('SELECT 1'))
+                db.session.commit()
+            except Exception as conn_err:
+                print(f"⚠️ Database connection test failed: {conn_err}")
+                db.session.rollback()
+            
+            # Ensure all tables exist
+            try:
+                db.create_all()
+                print("✅ Database tables checked/created on startup")
+            except Exception as table_err:
+                print(f"⚠️ Table creation warning: {table_err}")
+            
+            # Create admin user if doesn't exist
+            try:
+                admin = User.query.filter_by(email='admin@attendance.com').first()
+                if not admin:
+                    admin = User(
+                        name='Admin User',
+                        email='admin@attendance.com',
+                        phone='+1234567890',
+                        department='Administration',
+                        role='admin',
+                        status='active'
+                    )
+                    admin.set_password('admin123')
+                    db.session.add(admin)
+                    db.session.commit()
+                    print("✅ Admin user created on startup")
+            except Exception as admin_err:
+                print(f"⚠️ Admin creation warning: {admin_err}")
+                db.session.rollback()
     except Exception as e:
-        print(f"⚠️ Database initialization warning: {e}")
-        # Continue anyway - tables will be created on first request
+        print(f"⚠️ Startup initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Call initialization (non-blocking)
+try:
+    initialize_on_startup()
+except:
+    pass  # Continue even if initialization fails
 
 # Initialize WhatsApp service
 init_whatsapp_service(app)
