@@ -215,7 +215,30 @@ def init_db(app):
                 print("✅ Default admin user created: admin@attendance.com / admin123")
         except Exception as e:
             # User table might not exist yet or connection issue
-            pass
+            print(f"⚠️ Could not create admin user: {e}")
+            # Make sure tables exist first
+            try:
+                db.create_all()
+                # Try creating admin again
+                try:
+                    admin = User.query.filter_by(email='admin@attendance.com').first()
+                    if not admin:
+                        admin = User(
+                            name='Admin User',
+                            email='admin@attendance.com',
+                            phone='+1234567890',
+                            department='Administration',
+                            role='admin',
+                            status='active'
+                        )
+                        admin.set_password('admin123')
+                        db.session.add(admin)
+                        db.session.commit()
+                        print("✅ Default admin user created: admin@attendance.com / admin123")
+                except:
+                    pass
+            except:
+                pass
 
 
 

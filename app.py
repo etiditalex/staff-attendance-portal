@@ -116,6 +116,12 @@ def signup():
         
         # Create new user
         try:
+            # Ensure tables exist before creating user
+            try:
+                db.create_all()
+            except:
+                pass  # Tables might already exist
+            
             new_user = User(
                 name=name,
                 email=email,
@@ -134,6 +140,10 @@ def signup():
         
         except Exception as e:
             db.session.rollback()
+            # Log the error for debugging
+            print(f"❌ Signup error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             flash(f'Error creating account: {str(e)}', 'danger')
             return render_template('signup.html')
     
