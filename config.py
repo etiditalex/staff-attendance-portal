@@ -26,9 +26,17 @@ class Config:
     DB_NAME = os.getenv('DB_NAME', 'attendance_db')
     
     # SQLAlchemy Configuration
-    # Build database URI
-    password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}?charset=utf8mb4"
+    # Support both MySQL and PostgreSQL
+    DB_TYPE = os.getenv('DB_TYPE', 'mysql')  # Default to mysql for backward compatibility
+    
+    if DB_TYPE.lower() == 'postgresql' or 'postgres' in DB_HOST.lower():
+        # PostgreSQL connection
+        password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
+        SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}"
+    else:
+        # MySQL connection (default)
+        password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}?charset=utf8mb4"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False  # Set to True for SQL debugging
     
