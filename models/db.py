@@ -14,15 +14,33 @@ db = SQLAlchemy()
 
 # Detect database type for Enum handling
 def get_db_type():
-    """Detect if using PostgreSQL or MySQL"""
-    db_host = os.getenv('DB_HOST', '')
-    if 'postgres' in db_host.lower() or 'postgresql' in db_host.lower():
+    """Detect if using PostgreSQL or MySQL from environment"""
+    db_host = os.getenv('DB_HOST', '').lower()
+    db_type = os.getenv('DB_TYPE', '').lower()
+    
+    # Check multiple indicators
+    if (db_type in ('postgresql', 'postgres') or 
+        'postgres' in db_host or 
+        'dpg-' in db_host or 
+        db_host.endswith('.render.com')):
         return 'postgresql'
     return 'mysql'
 
-# PostgreSQL doesn't support ENUM like MySQL, use String for compatibility
-DB_TYPE = get_db_type()
-USE_ENUM = DB_TYPE == 'mysql'
+# Detect at module load (will be re-evaluated in app context)
+def is_postgresql():
+    """Check if using PostgreSQL - call after app config loaded"""
+    try:
+        from flask import current_app
+        db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        return 'postgresql' in db_uri.lower() or 'postgres' in db_uri.lower()
+    except:
+        # Fallback to environment variable check
+        db_host = os.getenv('DB_HOST', '').lower()
+        return 'postgres' in db_host or 'dpg-' in db_host
+
+# Use String for all (PostgreSQL compatible) - ENUM causes issues
+# SQLAlchemy will handle validation in application code
+USE_ENUM = False  # Disable ENUM for PostgreSQL compatibility
 
 # Helper function to handle connection errors
 def get_db_session():
@@ -43,13 +61,9 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), nullable=False)
     department = db.Column(db.String(50), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    # Use String for PostgreSQL compatibility, Enum for MySQL
-    if USE_ENUM:
-        role = db.Column(db.Enum('staff', 'admin', name='user_role'), default='staff', nullable=False)
-        status = db.Column(db.Enum('active', 'inactive', name='user_status'), default='active', nullable=False)
-    else:
-        role = db.Column(db.String(20), default='staff', nullable=False)
-        status = db.Column(db.String(20), default='active', nullable=False)
+    # Use String for PostgreSQL compatibility (ENUM causes issues)
+    role = db.Column(db.String(20), default='staff', nullable=False)
+    status = db.Column(db.String(20), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
