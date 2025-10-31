@@ -118,13 +118,9 @@ class Attendance(db.Model):
     date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     login_time = db.Column(db.DateTime, nullable=True)
     logout_time = db.Column(db.DateTime, nullable=True)
-    # Use String for PostgreSQL compatibility, Enum for MySQL
-    if USE_ENUM:
-        status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote', name='attendance_status'), default='Absent', nullable=False)
-        work_type = db.Column(db.Enum('Office', 'Remote', 'Leave', name='work_type_enum'), default='Office', nullable=False)
-    else:
-        status = db.Column(db.String(20), default='Absent', nullable=False)
-        work_type = db.Column(db.String(20), default='Office', nullable=False)
+    # Use String for PostgreSQL compatibility (no ENUM)
+    status = db.Column(db.String(20), default='Absent', nullable=False)
+    work_type = db.Column(db.String(20), default='Office', nullable=False)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -188,13 +184,9 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     message = db.Column(db.Text, nullable=False)
-    # Use String for PostgreSQL compatibility, Enum for MySQL
-    if USE_ENUM:
-        type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert', name='notification_type'), nullable=False)
-        status = db.Column(db.Enum('pending', 'sent', 'failed', name='notification_status'), default='pending', nullable=False)
-    else:
-        type = db.Column(db.String(20), nullable=False)
-        status = db.Column(db.String(20), default='pending', nullable=False)
+    # Use String for PostgreSQL compatibility (no ENUM)
+    type = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), default='pending', nullable=False)
     sent_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
