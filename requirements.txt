@@ -1,0 +1,12 @@
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+pymysql==1.1.0
+cryptography==41.0.7
+python-dotenv==1.0.0
+werkzeug==3.0.1
+twilio==8.11.0
+email-validator==2.1.0
+gunicorn==21.2.0
+
+

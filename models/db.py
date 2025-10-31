@@ -1,0 +1,221 @@
+"""
+Database models for Staff Attendance Portal
+Defines User, Attendance, and Notification models using SQLAlchemy ORM
+"""
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, date
+import pytz
+
+# Initialize SQLAlchemy with connection pooling
+db = SQLAlchemy()
+
+# Helper function to handle connection errors
+def get_db_session():
+    """Get database session with auto-reconnect"""
+    try:
+        return db.session
+    except Exception:
+        db.session.rollback()
+        return db.session
+
+class User(UserMixin, db.Model):
+    """User model for staff and admin accounts"""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(20), nullable=False)
+    department = db.Column(db.String(50), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.Enum('staff', 'admin'), default='staff', nullable=False)
+    status = db.Column(db.Enum('active', 'inactive'), default='active', nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    attendances = db.relationship('Attendance', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    notifications = db.relationship('Notification', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        """Hash and set the user's password"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Verify password against hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def is_admin(self):
+        """Check if user has admin role"""
+        return self.role == 'admin'
+    
+    def get_today_attendance(self):
+        """Get today's attendance record"""
+        today = date.today()
+        return Attendance.query.filter_by(user_id=self.id, date=today).first()
+    
+    def get_attendance_summary(self, days=7):
+        """Get attendance summary for the last N days"""
+        from sqlalchemy import func
+        from datetime import timedelta
+        
+        start_date = date.today() - timedelta(days=days-1)
+        
+        summary = db.session.query(
+            Attendance.status,
+            func.count(Attendance.id).label('count')
+        ).filter(
+            Attendance.user_id == self.id,
+            Attendance.date >= start_date
+        ).group_by(Attendance.status).all()
+        
+        return {status: count for status, count in summary}
+    
+    def __repr__(self):
+        return f'<User {self.email}>'
+
+
+class Attendance(db.Model):
+    """Attendance model for tracking daily login/logout"""
+    __tablename__ = 'attendance'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, default=date.today, index=True)
+    login_time = db.Column(db.DateTime, nullable=True)
+    logout_time = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.Enum('Present', 'Absent', 'Leave', 'Remote'), default='Absent', nullable=False)
+    work_type = db.Column(db.Enum('Office', 'Remote', 'Leave'), default='Office', nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Composite unique constraint to prevent duplicate entries per user per day
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'date', name='unique_user_date'),
+    )
+    
+    def mark_login(self):
+        """Mark login time and update status"""
+        self.login_time = datetime.now()
+        self.status = 'Present'
+        db.session.commit()
+    
+    def mark_logout(self):
+        """Mark logout time"""
+        self.logout_time = datetime.now()
+        db.session.commit()
+    
+    def get_work_duration(self):
+        """Calculate work duration in hours"""
+        if self.login_time and self.logout_time:
+            duration = self.logout_time - self.login_time
+            return round(duration.total_seconds() / 3600, 2)
+        return None
+    
+    def format_time(self, dt):
+        """Format datetime to readable string"""
+        if dt:
+            return dt.strftime('%I:%M %p')
+        return 'N/A'
+    
+    @staticmethod
+    def get_absent_users(target_date=None):
+        """Get list of users who haven't logged in for a specific date"""
+        if target_date is None:
+            target_date = date.today()
+        
+        # Get all active users
+        all_users = User.query.filter_by(status='active').all()
+        
+        # Get users who have attendance record for the date
+        present_user_ids = db.session.query(Attendance.user_id).filter(
+            Attendance.date == target_date,
+            Attendance.status != 'Absent'
+        ).all()
+        present_user_ids = [uid[0] for uid in present_user_ids]
+        
+        # Return users not in present list
+        return [user for user in all_users if user.id not in present_user_ids]
+    
+    def __repr__(self):
+        return f'<Attendance User:{self.user_id} Date:{self.date} Status:{self.status}>'
+
+
+class Notification(db.Model):
+    """Notification model for tracking WhatsApp messages"""
+    __tablename__ = 'notifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    message = db.Column(db.Text, nullable=False)
+    type = db.Column(db.Enum('login', 'logout', 'reminder', 'alert'), nullable=False)
+    status = db.Column(db.Enum('pending', 'sent', 'failed'), default='pending', nullable=False)
+    sent_at = db.Column(db.DateTime, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def mark_sent(self):
+        """Mark notification as sent"""
+        self.status = 'sent'
+        self.sent_at = datetime.now()
+        db.session.commit()
+    
+    def mark_failed(self, error):
+        """Mark notification as failed"""
+        self.status = 'failed'
+        self.error_message = str(error)
+        db.session.commit()
+    
+    def __repr__(self):
+        return f'<Notification {self.type} for User:{self.user_id}>'
+
+
+def init_db(app):
+    """Initialize database with app context"""
+    db.init_app(app)
+    
+    with app.app_context():
+        # Flask-SQLAlchemy handles connection pooling automatically
+        # No need to manually configure pool settings
+        
+        try:
+            # Check if tables exist first (faster than create_all)
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            existing_tables = inspector.get_table_names()
+            
+            # Only create tables if they don't exist (saves time)
+            if 'users' not in existing_tables:
+                db.create_all()
+        except Exception as e:
+            # If check fails, create tables anyway
+            try:
+                db.create_all()
+            except:
+                pass
+        
+        # Create default admin user if not exists
+        try:
+            admin = User.query.filter_by(email='admin@attendance.com').first()
+            if not admin:
+                admin = User(
+                    name='Admin User',
+                    email='admin@attendance.com',
+                    phone='+1234567890',
+                    department='Administration',
+                    role='admin',
+                    status='active'
+                )
+                admin.set_password('admin123')  # Change this in production
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ Default admin user created: admin@attendance.com / admin123")
+        except Exception as e:
+            # User table might not exist yet or connection issue
+            pass
+
+
+

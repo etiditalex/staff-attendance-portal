@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Staff Attendance Portal{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    
+    <!-- Welcome Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-house-door"></i> Welcome, {{ user.name }}!</h2>
+            <p class="text-muted">{{ today.strftime('%A, %B %d, %Y') }}</p>
+        </div>
+    </div>
+    
+    <!-- Today's Attendance Card -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Today's Attendance</h5>
+                </div>
+                <div class="card-body">
+                    {% if today_attendance %}
+                        <div class="row text-center">
+                            <div class="col-md-4 mb-3">
+                                <div class="p-3 bg-light rounded">
+                                    <i class="bi bi-box-arrow-in-right text-success" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Login Time</h6>
+                                    <h4 class="text-success">
+                                        {{ format_time(today_attendance.login_time) }}
+                                    </h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="p-3 bg-light rounded">
+                                    <i class="bi bi-box-arrow-right text-danger" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Logout Time</h6>
+                                    <h4 class="text-danger">
+                                        {{ format_time(today_attendance.logout_time) }}
+                                    </h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="p-3 bg-light rounded">
+                                    <i class="bi bi-hourglass-split text-primary" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Work Duration</h6>
+                                    <h4 class="text-primary">
+                                        {% if today_attendance.get_work_duration() %}
+                                            {{ today_attendance.get_work_duration() }} hrs
+                                        {% else %}
+                                            In Progress
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Status:</strong> {{ today_attendance.status }} | 
+                            <strong>Work Type:</strong> {{ today_attendance.work_type }}
+                        </div>
+                        
+                        {% if today_attendance.work_type == 'Office' and not today_attendance.logout_time %}
+                        <div class="text-center mt-3">
+                            <form method="POST" action="{{ url_for('mark_remote') }}" style="display: inline;">
+                                <button type="submit" class="btn btn-outline-primary">
+                                    <i class="bi bi-house"></i> Mark as Remote Work
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-exclamation-circle text-warning" style="font-size: 4rem;"></i>
+                            <h5 class="mt-3">No attendance recorded today</h5>
+                            <p class="text-muted">Your next login will automatically mark your attendance.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Summary Statistics -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Last 30 Days</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-check-circle text-success"></i> Present</span>
+                            <span class="badge bg-success rounded-pill">{{ summary.get('Present', 0) }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-house text-primary"></i> Remote</span>
+                            <span class="badge bg-primary rounded-pill">{{ summary.get('Remote', 0) }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-calendar-x text-warning"></i> Leave</span>
+                            <span class="badge bg-warning rounded-pill">{{ summary.get('Leave', 0) }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-x-circle text-danger"></i> Absent</span>
+                            <span class="badge bg-danger rounded-pill">{{ summary.get('Absent', 0) }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <button type="button" class="btn btn-outline-warning w-100 mb-2" data-bs-toggle="modal" data-bs-target="#leaveModal">
+                        <i class="bi bi-calendar-minus"></i> Request Leave
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Attendance History -->
+    <div class="row">
+        <div class="col">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-calendar3"></i> Recent Attendance (Last 7 Days)</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_attendance %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Login Time</th>
+                                    <th>Logout Time</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Work Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in recent_attendance %}
+                                <tr>
+                                    <td>{{ format_date(record.date) }}</td>
+                                    <td>{{ format_time(record.login_time) }}</td>
+                                    <td>{{ format_time(record.logout_time) }}</td>
+                                    <td>
+                                        {% if record.get_work_duration() %}
+                                            {{ record.get_work_duration() }} hrs
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.status == 'Present' %}
+                                            <span class="badge bg-success">{{ record.status }}</span>
+                                        {% elif record.status == 'Remote' %}
+                                            <span class="badge bg-primary">{{ record.status }}</span>
+                                        {% elif record.status == 'Leave' %}
+                                            <span class="badge bg-warning">{{ record.status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">{{ record.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ record.work_type }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">No attendance records yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leave Request Modal -->
+<div class="modal fade" id="leaveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="bi bi-calendar-minus"></i> Request Leave</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('mark_leave') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="leave_date" class="form-label">Leave Date</label>
+                        <input type="date" class="form-control" id="leave_date" name="leave_date" 
+                               min="{{ today.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="leave_type" class="form-label">Leave Type</label>
+                        <select class="form-select" id="leave_type" name="leave_type" required>
+                            <option value="Leave">General Leave</option>
+                            <option value="Remote">Remote Work</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Reason for leave..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+

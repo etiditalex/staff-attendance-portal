@@ -1,0 +1,51 @@
+# Render Blueprint for Staff Attendance Portal
+# This file automates the deployment process on Render.com
+
+databases:
+  - name: attendance-db
+    databaseName: attendance_db
+    user: attendance_user
+    plan: free
+
+services:
+  - type: web
+    name: staff-attendance-portal
+    runtime: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: gunicorn -w 4 -b 0.0.0.0:$PORT app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: DB_HOST
+        fromDatabase:
+          name: attendance-db
+          property: host
+      - key: DB_USER
+        fromDatabase:
+          name: attendance-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: attendance-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: attendance-db
+          property: database
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: ATTENDANCE_CUTOFF_TIME
+        value: "09:00"
+
+
+
