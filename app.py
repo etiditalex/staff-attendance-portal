@@ -60,9 +60,20 @@ def initialize_on_startup():
             try:
                 db.session.execute(text('SELECT 1'))
                 db.session.commit()
+                print("✅ Database connection test passed")
             except Exception as conn_err:
                 print(f"⚠️ Database connection test failed: {conn_err}")
+                print(f"   Error type: {type(conn_err).__name__}")
+                import traceback
+                traceback.print_exc()
                 db.session.rollback()
+                # Try to reconnect
+                try:
+                    db.session.close()
+                    db.engine.dispose()
+                    print("   Attempted to close and dispose connection")
+                except:
+                    pass
             
             # Ensure all tables exist
             try:

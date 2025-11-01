@@ -39,8 +39,23 @@ class Config:
         if database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
         # Use DATABASE_URL directly if provided by Render
+        # URL-encode special characters in password if needed
+        try:
+            from urllib.parse import quote_plus, urlparse, urlunparse
+            parsed = urlparse(database_url)
+            if parsed.password:
+                # Reconstruct URL with URL-encoded password
+                encoded_password = quote_plus(parsed.password)
+                new_netloc = f"{parsed.username}:{encoded_password}@{parsed.hostname}"
+                if parsed.port:
+                    new_netloc += f":{parsed.port}"
+                database_url = urlunparse((parsed.scheme, new_netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        except Exception as url_err:
+            print(f"⚠️ URL encoding warning: {url_err}, using original URL")
+        
         SQLALCHEMY_DATABASE_URI = database_url
         print(f"✅ Using DATABASE_URL from Render")
+        print(f"   URL preview: {database_url[:70]}..." if len(database_url) > 70 else f"   URL: {database_url[:70]}")
         # Extract values for display/debugging
         try:
             import re
