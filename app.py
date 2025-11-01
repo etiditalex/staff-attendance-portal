@@ -137,7 +137,15 @@ login_manager.login_message_category = 'info'
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login"""
-    return User.query.get(int(user_id))
+    try:
+        return User.query.get(int(user_id))
+    except Exception as e:
+        print(f"⚠️ Error loading user {user_id}: {e}")
+        db.session.rollback()
+        try:
+            return User.query.get(int(user_id))
+        except:
+            return None
 
 
 # ============= CONNECTION ERROR HANDLING =============
@@ -377,13 +385,25 @@ def login():
             # Find user (with error handling for lost connections)
             try:
                 user = User.query.filter_by(email=email).first()
-            except OperationalError:
+            except OperationalError as op_err:
+                print(f"⚠️ OperationalError during login query: {op_err}")
                 db.session.rollback()
                 try:
+                    # Try reconnecting
+                    db.session.close()
                     user = User.query.filter_by(email=email).first()
-                except:
+                except Exception as retry_err:
+                    print(f"❌ Retry failed: {retry_err}")
                     flash('Database connection error. Please try again.', 'danger')
                     return render_template('login.html')
+            except Exception as db_err:
+                print(f"❌ Database error during login: {db_err}")
+                print(f"   Error type: {type(db_err).__name__}")
+                import traceback
+                traceback.print_exc()
+                db.session.rollback()
+                flash('Database error. Please try again.', 'danger')
+                return render_template('login.html')
             
             if not user or not user.check_password(password):
                 flash('Invalid email or password.', 'danger')
