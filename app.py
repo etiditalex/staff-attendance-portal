@@ -15,6 +15,7 @@ import io
 from config import config
 from models.db import db, User, Attendance, Notification, init_db
 from utils.whatsapp import init_whatsapp_service, whatsapp_service
+from utils.email import init_email_service, get_email_service
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -78,6 +79,9 @@ except:
 
 # Initialize WhatsApp service
 init_whatsapp_service(app)
+
+# Initialize Email service
+init_email_service(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -301,12 +305,39 @@ def login():
                 # Mark login time
                 if not attendance.login_time:
                     attendance.mark_login()
+                    login_time = attendance.login_time
                     
-                    # Send WhatsApp notification
+                    # Send WhatsApp notification to staff member
                     try:
-                        whatsapp_service.send_login_notification(user, attendance.login_time)
+                        whatsapp_service.send_login_notification(user, login_time)
                     except Exception as e:
                         print(f"WhatsApp notification error: {e}")
+                    
+                    # Notify managers and directors via email and WhatsApp
+                    try:
+                        # Find all managers and directors
+                        managers = User.query.filter(
+                            User.role.in_(['manager', 'director']),
+                            User.status == 'active'
+                        ).all()
+                        
+                        email_service = get_email_service()
+                        
+                        for manager in managers:
+                            # Send email notification
+                            if email_service:
+                                try:
+                                    email_service.notify_manager_staff_login(manager, user, login_time)
+                                except Exception as e:
+                                    print(f"Email notification error to {manager.name}: {e}")
+                            
+                            # Send WhatsApp notification
+                            try:
+                                whatsapp_service.notify_manager_staff_login(manager, user, login_time)
+                            except Exception as e:
+                                print(f"WhatsApp notification error to manager {manager.name}: {e}")
+                    except Exception as e:
+                        print(f"Manager notification error: {e}")
             except OperationalError:
                 db.session.rollback()
         
@@ -623,6 +654,209 @@ def edit_attendance(attendance_id):
         flash(f'Error updating record: {str(e)}', 'danger')
     
     return redirect(url_for('admin_panel'))
+
+
+# ============= USER MANAGEMENT =============
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    """Admin user management page"""
+    try:
+        # Get filter parameters
+        filter_role = request.args.get('role', 'all')
+        filter_status = request.args.get('status', 'all')
+        filter_department = request.args.get('department', 'all')
+        search = request.args.get('search', '').strip()
+        
+        # Base query
+        query = User.query
+        
+        # Apply filters
+        if filter_role != 'all':
+            query = query.filter(User.role == filter_role)
+        
+        if filter_status != 'all':
+            query = query.filter(User.status == filter_status)
+        
+        if filter_department != 'all':
+            query = query.filter(User.department == filter_department)
+        
+        # Search by name or email (case-insensitive, cross-database compatible)
+        if search:
+            search_pattern = f'%{search.lower()}%'
+            query = query.filter(
+                or_(
+                    func.lower(User.name).like(search_pattern),
+                    func.lower(User.email).like(search_pattern)
+                )
+            )
+        
+        # Get results
+        users = query.order_by(User.name).all()
+        
+        # Get unique values for filters
+        departments = db.session.query(User.department).distinct().all()
+        departments = [d[0] for d in departments]
+        
+        # Statistics
+        total_users = User.query.count()
+        staff_count = User.query.filter_by(role='staff').count()
+        manager_count = User.query.filter_by(role='manager').count()
+        director_count = User.query.filter_by(role='director').count()
+        admin_count = User.query.filter_by(role='admin').count()
+        active_count = User.query.filter_by(status='active').count()
+        
+        stats = {
+            'total': total_users,
+            'staff': staff_count,
+            'manager': manager_count,
+            'director': director_count,
+            'admin': admin_count,
+            'active': active_count
+        }
+        
+        return render_template('admin_users.html',
+                             users=users,
+                             departments=departments,
+                             filter_role=filter_role,
+                             filter_status=filter_status,
+                             filter_department=filter_department,
+                             search=search,
+                             stats=stats)
+    except OperationalError:
+        db.session.rollback()
+        flash('Database connection error. Please refresh.', 'warning')
+        return render_template('admin_users.html',
+                             users=[],
+                             departments=[],
+                             filter_role='all',
+                             filter_status='all',
+                             filter_department='all',
+                             search='',
+                             stats={'total': 0, 'staff': 0, 'manager': 0, 'director': 0, 'admin': 0, 'active': 0})
+
+
+@app.route('/admin/users/create', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_user():
+    """Create new user with role assignment"""
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name', '').strip()
+            email = request.form.get('email', '').strip().lower()
+            phone = request.form.get('phone', '').strip()
+            department = request.form.get('department', '').strip()
+            role = request.form.get('role', 'staff').strip()
+            password = request.form.get('password', '').strip()
+            
+            # Validation
+            if not all([name, email, phone, department, password]):
+                flash('Please fill in all required fields.', 'danger')
+                return render_template('admin_user_form.html', user=None)
+            
+            # Check if email already exists
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                flash('Email already registered. Please use a different email.', 'danger')
+                return render_template('admin_user_form.html', user=None)
+            
+            # Create new user
+            new_user = User(
+                name=name,
+                email=email,
+                phone=phone,
+                department=department,
+                role=role,
+                status='active'
+            )
+            new_user.set_password(password)
+            
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'User {name} created successfully with role: {role}.', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating user: {str(e)}', 'danger')
+            return render_template('admin_user_form.html', user=None)
+    
+    return render_template('admin_user_form.html', user=None)
+
+
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    """Edit existing user"""
+    user = User.query.get_or_404(user_id)
+    
+    # Prevent editing yourself (optional safety check)
+    if user.id == current_user.id:
+        flash('You cannot edit your own account from here. Please use profile settings.', 'warning')
+        return redirect(url_for('admin_users'))
+    
+    if request.method == 'POST':
+        try:
+            user.name = request.form.get('name', '').strip()
+            user.email = request.form.get('email', '').strip().lower()
+            user.phone = request.form.get('phone', '').strip()
+            user.department = request.form.get('department', '').strip()
+            user.role = request.form.get('role', user.role).strip()
+            user.status = request.form.get('status', user.status).strip()
+            
+            # Check email uniqueness (if changed)
+            if user.email != request.form.get('original_email', ''):
+                existing_user = User.query.filter_by(email=user.email).first()
+                if existing_user:
+                    flash('Email already registered by another user.', 'danger')
+                    return render_template('admin_user_form.html', user=user)
+            
+            # Update password if provided
+            new_password = request.form.get('password', '').strip()
+            if new_password:
+                user.set_password(new_password)
+            
+            db.session.commit()
+            flash(f'User {user.name} updated successfully.', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating user: {str(e)}', 'danger')
+    
+    return render_template('admin_user_form.html', user=user)
+
+
+@app.route('/admin/users/toggle_status/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def toggle_user_status(user_id):
+    """Toggle user active/inactive status"""
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        # Prevent deactivating yourself
+        if user.id == current_user.id:
+            flash('You cannot deactivate your own account.', 'warning')
+            return redirect(url_for('admin_users'))
+        
+        # Toggle status
+        user.status = 'inactive' if user.status == 'active' else 'active'
+        db.session.commit()
+        
+        status_text = 'activated' if user.status == 'active' else 'deactivated'
+        flash(f'User {user.name} has been {status_text}.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating user status: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin_users'))
 
 
 # ============= ERROR HANDLERS =============

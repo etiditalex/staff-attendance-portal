@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{% if user %}Edit User{% else %}Create User{% endif %} - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-{% if user %}pencil{% else %}person-plus{% endif %}"></i>
+                        {% if user %}Edit User{% else %}Create New User{% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{% if user %}{{ url_for('edit_user', user_id=user.id) }}{% else %}{{ url_for('create_user') }}{% endif %}">
+                        {% if user %}
+                        <input type="hidden" name="original_email" value="{{ user.email }}">
+                        {% endif %}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{% if user %}{{ user.name }}{% endif %}" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="email" name="email" 
+                                       value="{% if user %}{{ user.email }}{% endif %}" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="phone" name="phone" 
+                                       value="{% if user %}{{ user.phone }}{% endif %}" 
+                                       placeholder="+1234567890" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="department" class="form-label">Department <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="department" name="department" 
+                                       value="{% if user %}{{ user.department }}{% endif %}" 
+                                       placeholder="e.g., IT, HR, Sales" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
+                                <select class="form-select" id="role" name="role" required>
+                                    <option value="staff" {% if user and user.role == 'staff' %}selected{% endif %}>
+                                        Staff
+                                    </option>
+                                    <option value="manager" {% if user and user.role == 'manager' %}selected{% endif %}>
+                                        Manager
+                                    </option>
+                                    <option value="director" {% if user and user.role == 'director' %}selected{% endif %}>
+                                        Director
+                                    </option>
+                                    <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>
+                                        Admin
+                                    </option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    <strong>Staff:</strong> Regular employee | 
+                                    <strong>Manager:</strong> Receives notifications | 
+                                    <strong>Director:</strong> Receives notifications | 
+                                    <strong>Admin:</strong> Full access
+                                </small>
+                            </div>
+                            
+                            {% if user %}
+                            <div class="col-md-6">
+                                <label for="status" class="form-label">Status</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="active" {% if user.status == 'active' %}selected{% endif %}>
+                                        Active
+                                    </option>
+                                    <option value="inactive" {% if user.status == 'inactive' %}selected{% endif %}>
+                                        Inactive
+                                    </option>
+                                </select>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                Password {% if not user %}<span class="text-danger">*</span>{% else %}<small class="text-muted">(Leave blank to keep current)</small>{% endif %}
+                            </label>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   {% if not user %}required{% endif %} minlength="6">
+                            {% if user %}
+                            <small class="form-text text-muted">Only fill this field if you want to change the password.</small>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Role Information:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li><strong>Staff:</strong> Can log in/out and mark attendance</li>
+                                <li><strong>Manager:</strong> Receives email/WhatsApp notifications when staff logs in</li>
+                                <li><strong>Director:</strong> Receives email/WhatsApp notifications when staff logs in</li>
+                                <li><strong>Admin:</strong> Full system access, cannot mark attendance</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> {% if user %}Update User{% else %}Create User{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

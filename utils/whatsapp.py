@@ -153,6 +153,61 @@ class WhatsAppService:
             notification.mark_failed(result)
         
         return success
+    
+    def notify_manager_staff_login(self, manager, staff_user, login_time):
+        """
+        Send WhatsApp notification to manager/director when staff logs in
+        
+        Args:
+            manager: User model instance (manager or director)
+            staff_user: User model instance (staff who logged in)
+            login_time: datetime object
+        
+        Returns:
+            bool: True if sent successfully
+        """
+        time_str = login_time.strftime('%I:%M %p')
+        date_str = login_time.strftime('%B %d, %Y')
+        
+        message = f"""🔔 Staff Login Notification
+
+Hello {manager.name},
+
+Staff member {staff_user.name} has logged in to the Attendance Portal.
+
+📋 Details:
+• Name: {staff_user.name}
+• Email: {staff_user.email}
+• Department: {staff_user.department}
+• Login Time: {time_str}
+• Date: {date_str}
+
+This is an automated notification from the Attendance Portal."""
+        
+        # Create notification record (linked to manager)
+        notification = Notification(
+            user_id=manager.id,
+            message=f"Staff {staff_user.name} logged in at {time_str}",
+            type='manager_notification'
+        )
+        db.session.add(notification)
+        
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
+        
+        # Send WhatsApp message
+        success, result = self.send_message(manager.phone, message)
+        
+        if success:
+            notification.mark_sent()
+            print(f"✅ Login notification WhatsApp sent to manager {manager.name}")
+        else:
+            notification.mark_failed(result)
+            print(f"❌ Failed to send login notification WhatsApp to manager {manager.name}: {result}")
+        
+        return success
 
 
 # Global WhatsApp service instance
