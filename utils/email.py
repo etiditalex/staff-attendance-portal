@@ -13,13 +13,30 @@ def init_email_service(app):
     """Initialize Flask-Mail with app configuration"""
     global mail
     
-    mail = Mail(app)
-    
-    # Check if email is configured
-    if app.config.get('MAIL_USERNAME') and app.config.get('MAIL_PASSWORD'):
-        print("✅ Email service initialized successfully")
-    else:
-        print("⚠️ Email service not configured. Notifications will be logged but not sent.")
+    try:
+        mail = Mail(app)
+        
+        # Check if email is configured
+        mail_username = app.config.get('MAIL_USERNAME', '')
+        mail_password = app.config.get('MAIL_PASSWORD', '')
+        mail_server = app.config.get('MAIL_SERVER', '')
+        
+        if mail_username and mail_password:
+            print(f"✅ Email service initialized successfully")
+            print(f"   Server: {mail_server}")
+            print(f"   Username: {mail_username}")
+            print(f"   Password: {'*' * min(len(mail_password), 10)} (configured)")
+        else:
+            print("⚠️ Email service not configured. Notifications will be logged but not sent.")
+            if not mail_username:
+                print("   Missing: MAIL_USERNAME")
+            if not mail_password:
+                print("   Missing: MAIL_PASSWORD")
+    except Exception as e:
+        print(f"❌ Failed to initialize email service: {e}")
+        import traceback
+        traceback.print_exc()
+        mail = None
     
     return mail
 
