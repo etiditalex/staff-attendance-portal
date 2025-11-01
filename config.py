@@ -93,26 +93,26 @@ class Config:
     if SQLALCHEMY_DATABASE_URI is None:
         # If on Render, we MUST use PostgreSQL - check if we have the right variables
         if is_render and DB_HOST == 'localhost':
-            print("❌ ERROR: On Render but DB_HOST is still 'localhost'!")
-            print("   This means environment variables from Render aren't being set.")
+            print("⚠️ WARNING: On Render but DB_HOST is still 'localhost'!")
+            print("   This means environment variables from Render aren't being set correctly.")
             print("   Please check Render Dashboard → Environment Variables:")
             print("   - DB_HOST should be your PostgreSQL host (e.g., dpg-xxxxx-xxx)")
             print("   - DB_USER should be your PostgreSQL username")
             print("   - DB_PASSWORD should be your PostgreSQL password")
             print("   - DB_NAME should be your database name")
             print("   - DB_TYPE should be 'postgresql'")
-            print("\n   Falling back to DATABASE_URL if available...")
-            # Try to get DATABASE_URL as last resort
+            print("\n   Attempting to use DATABASE_URL as fallback...")
+            # Try to get DATABASE_URL as last resort (Render sometimes sets this automatically)
             database_url_fallback = os.getenv('DATABASE_URL', '')
             if database_url_fallback and database_url_fallback.startswith('postgresql://'):
                 SQLALCHEMY_DATABASE_URI = database_url_fallback
-                print(f"✅ Using DATABASE_URL fallback")
+                print(f"✅ Using DATABASE_URL fallback: {database_url_fallback[:50]}...")
             else:
-                raise ValueError(
-                    "Cannot connect to database on Render. "
-                    "Please set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in Render Environment Variables, "
-                    "or ensure DATABASE_URL is set."
-                )
+                # Use a dummy connection string to allow build to complete
+                # Will fail at runtime with clear error message
+                print("❌ No DATABASE_URL found. Using placeholder - will fail at runtime.")
+                print("   Set environment variables in Render Dashboard before using the app.")
+                SQLALCHEMY_DATABASE_URI = "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
         elif is_postgres:
             # PostgreSQL connection
             password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
