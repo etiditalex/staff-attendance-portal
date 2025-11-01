@@ -157,9 +157,13 @@ def admin_required(f):
 @app.route('/')
 def index():
     """Homepage - redirect based on login status"""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    try:
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
+    except Exception:
+        # If there's any error, still redirect to login
+        return redirect(url_for('login'))
 
 
 @app.route('/health')
@@ -346,7 +350,8 @@ def signup():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login page with automatic attendance marking"""
-    if current_user.is_authenticated:
+    try:
+        if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     
     if request.method == 'POST':
