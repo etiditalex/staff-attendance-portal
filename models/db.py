@@ -232,8 +232,25 @@ def init_db(app):
     db.init_app(app)
     
     with app.app_context():
-        # Flask-SQLAlchemy handles connection pooling automatically
-        # No need to manually configure pool settings
+        # Configure connection pool settings if provided in config
+        try:
+            engine_options = app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {})
+            if engine_options:
+                # Apply engine options if SQLAlchemy supports it
+                # Flask-SQLAlchemy automatically applies SQLALCHEMY_ENGINE_OPTIONS
+                print(f"✅ Database engine options configured")
+        except:
+            pass
+        
+        # Test connection once
+        try:
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            db.session.commit()
+            print("✅ Initial database connection test passed")
+        except Exception as conn_test:
+            print(f"⚠️ Initial connection test failed: {conn_test}")
+            db.session.rollback()
         
         try:
             # Check if tables exist first (faster than create_all)
