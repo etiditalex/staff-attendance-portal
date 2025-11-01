@@ -352,9 +352,9 @@ def login():
     """User login page with automatic attendance marking"""
     try:
         if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    if request.method == 'POST':
+            return redirect(url_for('dashboard'))
+        
+        if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         remember = request.form.get('remember', False)
@@ -445,6 +445,17 @@ def login():
         # Redirect to next page or dashboard
         next_page = request.args.get('next')
         return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+        
+        return render_template('login.html')
+    except Exception as e:
+        # Log error but still try to show login page
+        print(f"Login route error: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            return render_template('login.html')
+        except:
+            return f"<h1>Login</h1><p>Service is starting up. Please wait and refresh.</p><p>Error: {str(e)[:200]}</p>", 503
     
     return render_template('login.html')
 
