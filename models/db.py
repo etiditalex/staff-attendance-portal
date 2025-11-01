@@ -207,6 +207,26 @@ class Notification(db.Model):
         return f'<Notification {self.type} for User:{self.user_id}>'
 
 
+class WebAuthnCredential(db.Model):
+    """WebAuthn/FIDO2 credentials for biometric authentication"""
+    __tablename__ = 'webauthn_credentials'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    credential_id = db.Column(db.Text, nullable=False, unique=True)  # Base64 encoded
+    public_key = db.Column(db.Text, nullable=False)  # JSON string of public key
+    counter = db.Column(db.BigInteger, default=0, nullable=False)
+    device_name = db.Column(db.String(100), nullable=True)  # e.g., "iPhone 13", "Chrome on Windows"
+    registered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    user = db.relationship('User', backref='webauthn_credentials')
+    
+    def __repr__(self):
+        return f'<WebAuthnCredential {self.device_name} for User:{self.user_id}>'
+
+
 def init_db(app):
     """Initialize database with app context"""
     db.init_app(app)

@@ -13,7 +13,7 @@ import io
 
 # Local imports
 from config import config
-from models.db import db, User, Attendance, Notification, init_db
+from models.db import db, User, Attendance, Notification, WebAuthnCredential, init_db
 from utils.whatsapp import init_whatsapp_service, whatsapp_service
 from utils.email import init_email_service, get_email_service
 
@@ -367,6 +367,187 @@ def login():
         return redirect(next_page) if next_page else redirect(url_for('dashboard'))
     
     return render_template('login.html')
+
+
+# ============= WEBAUTHN BIOMETRIC AUTHENTICATION =============
+
+@app.route('/webauthn/register/options', methods=['POST'])
+@login_required
+def webauthn_register_options():
+    """Generate WebAuthn registration options for current user"""
+    try:
+        from utils.webauthn import create_registration_options
+        options = create_registration_options(current_user)
+        return jsonify(options)
+    except Exception as e:
+        print(f"WebAuthn registration options error: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/webauthn/register', methods=['POST'])
+@login_required
+def webauthn_register():
+    """Verify and store WebAuthn credential"""
+    try:
+        from utils.webauthn import verify_registration
+        data = request.get_json()
+        credential = data.get('credential')
+        device_name = data.get('deviceName', '')
+        
+        success, result = verify_registration(current_user, credential, device_name)
+        
+        if success:
+            flash('Fingerprint registered successfully! You can now use it to sign in.', 'success')
+            return jsonify({'success': True, 'credentialId': result})
+        else:
+            flash(f'Registration failed: {result}', 'danger')
+            return jsonify({'error': result}), 400
+            
+    except Exception as e:
+        print(f"WebAuthn registration error: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/webauthn/login/options', methods=['POST'])
+def webauthn_login_options():
+    """Generate WebAuthn authentication options"""
+    try:
+        from utils.webauthn import create_authentication_options
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({'error': 'Email required'}), 400
+        
+        options, error = create_authentication_options(email)
+        
+        if error:
+            return jsonify({'error': error}), 400
+        
+        return jsonify(options)
+        
+    except Exception as e:
+        print(f"WebAuthn login options error: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/webauthn/login', methods=['POST'])
+def webauthn_login():
+    """Verify WebAuthn authentication and log user in"""
+    try:
+        from utils.webauthn import verify_authentication
+        
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        credential = data.get('credential')
+        
+        if not email or not credential:
+            return jsonify({'error': 'Email and credential required'}), 400
+        
+        success, result = verify_authentication(email, credential)
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        user = result
+        
+        if user.status != 'active':
+            return jsonify({'error': 'Account is inactive'}), 403
+        
+        # Log user in
+        login_user(user, remember=True)
+        
+        # Mark attendance (same as regular login)
+        if not user.is_admin():
+            try:
+                today = date.today()
+                attendance = Attendance.query.filter_by(user_id=user.id, date=today).first()
+                
+                if not attendance:
+                    attendance = Attendance(
+                        user_id=user.id,
+                        date=today,
+                        status='Present',
+                        work_type='Office'
+                    )
+                    db.session.add(attendance)
+                
+                if not attendance.login_time:
+                    attendance.mark_login()
+                    login_time = attendance.login_time
+                    
+                    # Send notifications (same as regular login)
+                    try:
+                        whatsapp_service.send_login_notification(user, login_time)
+                    except Exception as e:
+                        print(f"WhatsApp notification error: {e}")
+                    
+                    # Notify managers
+                    try:
+                        managers = User.query.filter(
+                            User.role.in_(['manager', 'director']),
+                            User.status == 'active'
+                        ).all()
+                        
+                        email_service = get_email_service()
+                        
+                        for manager in managers:
+                            if email_service:
+                                try:
+                                    email_service.notify_manager_staff_login(manager, user, login_time)
+                                except Exception as e:
+                                    print(f"Email notification error: {e}")
+                            
+                            try:
+                                whatsapp_service.notify_manager_staff_login(manager, user, login_time)
+                            except Exception as e:
+                                print(f"WhatsApp notification error: {e}")
+                    except Exception as e:
+                        print(f"Manager notification error: {e}")
+            except OperationalError:
+                db.session.rollback()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Welcome back, {user.name}!',
+            'redirect': url_for('dashboard')
+        })
+        
+    except Exception as e:
+        print(f"WebAuthn login error: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/webauthn/credentials', methods=['GET'])
+@login_required
+def webauthn_list_credentials():
+    """Get list of registered biometric credentials for current user"""
+    credentials = WebAuthnCredential.query.filter_by(user_id=current_user.id).all()
+    return jsonify([
+        {
+            'id': cred.id,
+            'device_name': cred.device_name,
+            'registered_at': cred.registered_at.isoformat(),
+            'last_used_at': cred.last_used_at.isoformat() if cred.last_used_at else None
+        }
+        for cred in credentials
+    ])
+
+
+@app.route('/webauthn/credentials/<int:credential_id>', methods=['DELETE'])
+@login_required
+def webauthn_delete_credential(credential_id):
+    """Delete a biometric credential"""
+    credential = WebAuthnCredential.query.filter_by(
+        id=credential_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    db.session.delete(credential)
+    db.session.commit()
+    
+    flash('Biometric credential removed successfully.', 'success')
+    return jsonify({'success': True})
 
 
 @app.route('/logout')

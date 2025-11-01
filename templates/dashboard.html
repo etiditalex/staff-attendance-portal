@@ -8,8 +8,39 @@
     <!-- Welcome Header -->
     <div class="row mb-4">
         <div class="col">
-            <h2><i class="bi bi-house-door"></i> Welcome, {{ user.name }}!</h2>
-            <p class="text-muted">{{ today.strftime('%A, %B %d, %Y') }}</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="bi bi-house-door"></i> Welcome, {{ user.name }}!</h2>
+                    <p class="text-muted">{{ today.strftime('%A, %B %d, %Y') }}</p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline-primary" onclick="registerFingerprint()">
+                        <i class="bi bi-fingerprint"></i> Register Fingerprint
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fingerprint Registration Modal -->
+    <div class="modal fade" id="fingerprintModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-fingerprint"></i> Register Fingerprint</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="fingerprint-register-status"></div>
+                    <p>Follow the prompts on your device to register your fingerprint.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="start-register-btn" onclick="startFingerprintRegistration()">
+                        Start Registration
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -225,6 +256,140 @@
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+// Helper functions for base64 conversion
+function base64urlToBase64(base64url) {
+    let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) {
+        base64 += '=';
+    }
+    return base64;
+}
+
+function base64ToBase64url(base64) {
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function registerFingerprint() {
+    const modal = new bootstrap.Modal(document.getElementById('fingerprintModal'));
+    modal.show();
+}
+
+async function startFingerprintRegistration() {
+    const statusDiv = document.getElementById('fingerprint-register-status');
+    const btn = document.getElementById('start-register-btn');
+    
+    // Check if WebAuthn is supported
+    if (!window.PublicKeyCredential) {
+        statusDiv.innerHTML = '<div class="alert alert-warning">Fingerprint authentication is not supported in this browser/device.</div>';
+        return;
+    }
+    
+    try {
+        btn.disabled = true;
+        statusDiv.innerHTML = '<div class="alert alert-info">Requesting registration options...</div>';
+        
+        // Get registration options
+        const optionsResponse = await fetch('/webauthn/register/options', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const options = await optionsResponse.json();
+        
+        if (!optionsResponse.ok) {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${options.error || 'Registration failed'}</div>`;
+            btn.disabled = false;
+            return;
+        }
+        
+        // Convert challenge to ArrayBuffer
+        const challenge = Uint8Array.from(atob(base64urlToBase64(options.challenge)), c => c.charCodeAt(0));
+        
+        // Convert user ID
+        const userId = Uint8Array.from(atob(base64urlToBase64(options.user.id)), c => c.charCodeAt(0));
+        
+        // Convert exclude credentials
+        const excludeCredentials = (options.excludeCredentials || []).map(cred => ({
+            ...cred,
+            id: Uint8Array.from(atob(base64urlToBase64(cred.id)), c => c.charCodeAt(0))
+        }));
+        
+        const publicKeyCredentialCreationOptions = {
+            challenge: challenge,
+            rp: options.rp,
+            user: {
+                id: userId,
+                name: options.user.name,
+                displayName: options.user.displayName
+            },
+            pubKeyCredParams: options.pubKeyCredParams,
+            authenticatorSelection: options.authenticatorSelection,
+            timeout: options.timeout,
+            attestation: options.attestation,
+            excludeCredentials: excludeCredentials
+        };
+        
+        statusDiv.innerHTML = '<div class="alert alert-info">Please use your fingerprint to complete registration...</div>';
+        
+        // Create credential
+        const credential = await navigator.credentials.create({
+            publicKey: publicKeyCredentialCreationOptions
+        });
+        
+        // Convert response to base64url
+        const response = {
+            id: base64ToBase64url(btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))),
+            rawId: base64ToBase64url(btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))),
+            type: credential.type,
+            response: {
+                attestationObject: base64ToBase64url(btoa(String.fromCharCode(...new Uint8Array(credential.response.attestationObject)))),
+                clientDataJSON: base64ToBase64url(btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))))
+            }
+        };
+        
+        // Get device name
+        const deviceName = navigator.userAgent || 'Unknown Device';
+        
+        // Submit registration
+        const registerResponse = await fetch('/webauthn/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                credential: response,
+                deviceName: deviceName
+            })
+        });
+        
+        const registerData = await registerResponse.json();
+        
+        if (registerResponse.ok && registerData.success) {
+            statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Fingerprint registered successfully! You can now use it to sign in.</div>';
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${registerData.error || 'Registration failed'}</div>`;
+            btn.disabled = false;
+        }
+        
+    } catch (error) {
+        console.error('Fingerprint registration error:', error);
+        if (error.name === 'NotAllowedError') {
+            statusDiv.innerHTML = '<div class="alert alert-warning">Registration cancelled or not available.</div>';
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">Registration error: ${error.message}</div>`;
+        }
+        btn.disabled = false;
+    }
+}
+</script>
 {% endblock %}
 
 
