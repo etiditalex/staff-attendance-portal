@@ -181,10 +181,11 @@ def health_check():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     """User registration page"""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    if request.method == 'POST':
+    try:
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard'))
+        
+        if request.method == 'POST':
         # Get form data
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip().lower()
@@ -278,8 +279,23 @@ def signup():
                 # Show helpful error
                 flash(f'Error: {error_msg[:150]}', 'danger')
             return render_template('signup.html')
-    
-    return render_template('signup.html')
+        
+        return render_template('signup.html')
+    except Exception as outer_error:
+        # Catch any error that wasn't caught in inner try/except
+        print("=" * 60)
+        print("❌ SIGNUP ROUTE OUTER ERROR")
+        print("=" * 60)
+        print(f"Error Type: {type(outer_error).__name__}")
+        print(f"Error Message: {str(outer_error)}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 60)
+        flash(f'An error occurred: {str(outer_error)[:150]}', 'danger')
+        try:
+            return render_template('signup.html')
+        except:
+            return f"<h1>Error</h1><p>{str(outer_error)}</p><p><a href='/'>Go Home</a></p>", 500
 
 
 @app.route('/login', methods=['GET', 'POST'])
