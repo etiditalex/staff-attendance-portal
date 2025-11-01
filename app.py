@@ -769,39 +769,89 @@ def logout():
 @login_required
 def dashboard():
     """User dashboard showing today's attendance and recent history"""
-    if current_user.is_admin():
-        return redirect(url_for('admin_panel'))
-    
     try:
-        # Get today's attendance
-        today = date.today()
-        today_attendance = current_user.get_today_attendance()
+        if current_user.is_admin():
+            return redirect(url_for('admin_panel'))
         
-        # Get last 7 days attendance
-        start_date = today - timedelta(days=6)
-        recent_attendance = Attendance.query.filter(
-            Attendance.user_id == current_user.id,
-            Attendance.date >= start_date
-        ).order_by(Attendance.date.desc()).all()
-        
-        # Get summary statistics
-        summary = current_user.get_attendance_summary(30)  # Last 30 days
-        
-        return render_template('dashboard.html',
-                             user=current_user,
-                             today_attendance=today_attendance,
-                             recent_attendance=recent_attendance,
-                             summary=summary,
-                             today=today)
-    except OperationalError:
-        db.session.rollback()
-        flash('Database connection error. Please refresh.', 'warning')
-        return render_template('dashboard.html',
-                             user=current_user,
-                             today_attendance=None,
-                             recent_attendance=[],
-                             summary={},
-                             today=date.today())
+        try:
+            # Get today's attendance
+            today = date.today()
+            today_attendance = None
+            try:
+                today_attendance = current_user.get_today_attendance()
+            except Exception as today_err:
+                print(f"⚠️ Error getting today's attendance: {today_err}")
+                # Try direct query
+                try:
+                    today_attendance = Attendance.query.filter_by(
+                        user_id=current_user.id,
+                        date=today
+                    ).first()
+                except Exception as direct_err:
+                    print(f"⚠️ Direct query also failed: {direct_err}")
+            
+            # Get last 7 days attendance
+            recent_attendance = []
+            try:
+                start_date = today - timedelta(days=6)
+                recent_attendance = Attendance.query.filter(
+                    Attendance.user_id == current_user.id,
+                    Attendance.date >= start_date
+                ).order_by(Attendance.date.desc()).all()
+            except Exception as recent_err:
+                print(f"⚠️ Error getting recent attendance: {recent_err}")
+                db.session.rollback()
+            
+            # Get summary statistics
+            summary = {}
+            try:
+                summary = current_user.get_attendance_summary(30)  # Last 30 days
+            except Exception as summary_err:
+                print(f"⚠️ Error getting attendance summary: {summary_err}")
+                # Provide default summary
+                summary = {
+                    'total_days': 0,
+                    'present_days': 0,
+                    'remote_days': 0,
+                    'leave_days': 0,
+                    'absent_days': 0
+                }
+            
+            return render_template('dashboard.html',
+                                 user=current_user,
+                                 today_attendance=today_attendance,
+                                 recent_attendance=recent_attendance,
+                                 summary=summary,
+                                 today=today)
+        except OperationalError as op_err:
+            print(f"⚠️ OperationalError in dashboard: {op_err}")
+            db.session.rollback()
+            flash('Database connection error. Please refresh.', 'warning')
+            return render_template('dashboard.html',
+                                 user=current_user,
+                                 today_attendance=None,
+                                 recent_attendance=[],
+                                 summary={},
+                                 today=date.today())
+        except Exception as e:
+            print(f"❌ Dashboard error: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            db.session.rollback()
+            flash('Error loading dashboard. Please try again.', 'warning')
+            return render_template('dashboard.html',
+                                 user=current_user,
+                                 today_attendance=None,
+                                 recent_attendance=[],
+                                 summary={},
+                                 today=date.today())
+    except Exception as outer_err:
+        print(f"❌ Dashboard outer error: {outer_err}")
+        import traceback
+        traceback.print_exc()
+        flash('An error occurred. Please try again.', 'danger')
+        return redirect(url_for('login'))
 
 
 @app.route('/mark_leave', methods=['POST'])
