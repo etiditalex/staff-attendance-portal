@@ -21,8 +21,18 @@ from utils.email import init_email_service, get_email_service
 app = Flask(__name__)
 
 # Load configuration
-env = 'development'  # Change to 'production' when deploying
-app.config.from_object(config[env])
+# Use 'production' on Render, 'development' locally
+import os
+env = 'production' if os.getenv('PORT') or os.getenv('RENDER') else 'development'
+try:
+    app.config.from_object(config[env])
+    print(f"✅ Loaded {env} configuration")
+except Exception as e:
+    print(f"❌ Config loading error: {e}")
+    import traceback
+    traceback.print_exc()
+    # Fallback to development config
+    app.config.from_object(config['development'])
 
 # Initialize database (with auto-table creation)
 init_db(app)
@@ -74,14 +84,23 @@ def initialize_on_startup():
 # Call initialization (non-blocking)
 try:
     initialize_on_startup()
-except:
-    pass  # Continue even if initialization fails
+except Exception as e:
+    print(f"⚠️ Startup initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    # Don't crash - let app start anyway
 
 # Initialize WhatsApp service
-init_whatsapp_service(app)
+try:
+    init_whatsapp_service(app)
+except Exception as e:
+    print(f"⚠️ WhatsApp service initialization failed: {e}")
 
 # Initialize Email service
-init_email_service(app)
+try:
+    init_email_service(app)
+except Exception as e:
+    print(f"⚠️ Email service initialization failed: {e}")
 
 # Initialize Flask-Login
 login_manager = LoginManager()
