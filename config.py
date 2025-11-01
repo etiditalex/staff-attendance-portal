@@ -29,17 +29,30 @@ class Config:
     # Support both MySQL and PostgreSQL
     DB_TYPE = os.getenv('DB_TYPE', '').lower()
     
+    # Check if we're on Render (Render sets RENDER environment variable)
+    is_render = os.getenv('RENDER', '').lower() == 'true'
+    
     # Auto-detect PostgreSQL from environment
     # Check if DB_HOST looks like a Render PostgreSQL host (contains 'dpg-' or ends with '.render.com')
     # OR if DB_TYPE is explicitly set to postgresql/postgres
+    # OR if we're on Render (force PostgreSQL on Render)
     db_host_lower = DB_HOST.lower() if DB_HOST else ''
     is_postgres = (
         DB_TYPE in ('postgresql', 'postgres') or
+        is_render or  # Force PostgreSQL on Render
         'dpg-' in db_host_lower or 
         'postgres' in db_host_lower or
         db_host_lower.endswith('.render.com') or
-        db_host_lower.startswith('dpg-')
+        db_host_lower.startswith('dpg-') or
+        'postgresql' in db_host_lower
     )
+    
+    # Debug logging
+    print(f"🔍 Database Detection:")
+    print(f"   DB_TYPE: {DB_TYPE or 'not set'}")
+    print(f"   DB_HOST: {DB_HOST}")
+    print(f"   Is Render: {is_render}")
+    print(f"   Detected as PostgreSQL: {is_postgres}")
     
     if is_postgres:
         # PostgreSQL connection
@@ -47,12 +60,12 @@ class Config:
         # PostgreSQL uses format: postgresql://user:password@host:port/database
         # Render provides host without port, SQLAlchemy uses default 5432
         SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}"
-        print(f"✅ Using PostgreSQL: {DB_HOST}/{DB_NAME}")
+        print(f"✅ Using PostgreSQL: {DB_USER}@{DB_HOST}/{DB_NAME}")
     else:
         # MySQL connection (default for local development)
         password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
         SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}?charset=utf8mb4"
-        print(f"✅ Using MySQL: {DB_HOST}/{DB_NAME}")
+        print(f"✅ Using MySQL: {DB_USER}@{DB_HOST}/{DB_NAME}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False  # Set to True for SQL debugging
     
