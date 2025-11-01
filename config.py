@@ -59,33 +59,43 @@ class Config:
     # Support both MySQL and PostgreSQL
     DB_TYPE = os.getenv('DB_TYPE', '').lower()
     
-    # Check if we're on Render
-    # Render sets RENDER=true OR we can detect by PORT environment variable
+    # Check if we're on Render - multiple detection methods
+    port_var = os.getenv('PORT')
+    render_var = os.getenv('RENDER', '').lower()
     is_render = (
-        os.getenv('RENDER', '').lower() == 'true' or
-        os.getenv('PORT') is not None  # Render always sets PORT
+        render_var == 'true' or
+        port_var is not None or
+        'render.com' in str(os.getenv('HOSTNAME', '')).lower()
     )
     
     # Auto-detect PostgreSQL from environment
-    # Check if DB_HOST looks like a Render PostgreSQL host (contains 'dpg-' or ends with '.render.com')
-    # OR if DB_TYPE is explicitly set to postgresql/postgres
-    # OR if we're on Render (force PostgreSQL on Render)
     db_host_lower = (DB_HOST or '').lower()
-    is_postgres = (
-        SQLALCHEMY_DATABASE_URI is not None or  # Already using DATABASE_URL (PostgreSQL)
-        DB_TYPE in ('postgresql', 'postgres') or
-        is_render or  # Force PostgreSQL on Render
-        'dpg-' in db_host_lower or 
-        'postgres' in db_host_lower or
-        db_host_lower.endswith('.render.com') or
-        db_host_lower.startswith('dpg-') or
-        'postgresql' in db_host_lower
-    )
     
-    # Debug logging
-    print(f"🔍 Database Detection:")
+    # FORCE PostgreSQL if we're on Render (PORT variable is always set on Render)
+    if port_var is not None:
+        print(f"🚨 DETECTED RENDER ENVIRONMENT (PORT={port_var}) - FORCING POSTGRESQL")
+        is_postgres = True
+    else:
+        # Check other indicators
+        is_postgres = (
+            SQLALCHEMY_DATABASE_URI is not None or  # Already using DATABASE_URL (PostgreSQL)
+            DB_TYPE in ('postgresql', 'postgres') or
+            'dpg-' in db_host_lower or 
+            'postgres' in db_host_lower or
+            db_host_lower.endswith('.render.com') or
+            db_host_lower.startswith('dpg-') or
+            'postgresql' in db_host_lower
+        )
+    
+    # Debug logging - very detailed
+    print(f"🔍 Database Detection Details:")
+    print(f"   PORT env var: {port_var or 'NOT SET'}")
+    print(f"   RENDER env var: {render_var or 'NOT SET'}")
     print(f"   DB_TYPE: {DB_TYPE or 'not set'}")
     print(f"   DB_HOST: {DB_HOST or 'not set'}")
+    print(f"   DB_USER: {DB_USER or 'not set'}")
+    print(f"   DB_NAME: {DB_NAME or 'not set'}")
+    print(f"   DATABASE_URL: {('SET' if database_url else 'NOT SET')}")
     print(f"   Is Render: {is_render}")
     print(f"   Detected as PostgreSQL: {is_postgres}")
     
@@ -114,12 +124,30 @@ class Config:
                 print("   Set environment variables in Render Dashboard before using the app.")
                 SQLALCHEMY_DATABASE_URI = "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
         elif is_postgres:
-            # PostgreSQL connection
-            password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
-            # PostgreSQL uses format: postgresql://user:password@host:port/database
-            # Render provides host without port, SQLAlchemy uses default 5432
-            SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}"
-            print(f"✅ Using PostgreSQL: {DB_USER}@{DB_HOST}/{DB_NAME}")
+            # If on Render but DB_HOST is still localhost, try DATABASE_URL
+            if is_render and DB_HOST == 'localhost':
+                print("⚠️ On Render but DB_HOST is localhost - trying DATABASE_URL...")
+                database_url_fallback = os.getenv('DATABASE_URL', '')
+                if database_url_fallback and database_url_fallback.startswith('postgresql://'):
+                    SQLALCHEMY_DATABASE_URI = database_url_fallback
+                    print(f"✅ Using DATABASE_URL: {database_url_fallback[:60]}...")
+                else:
+                    print("❌ CRITICAL: No database connection available!")
+                    print("   You MUST set database environment variables in Render:")
+                    print("   - DB_HOST (your PostgreSQL host)")
+                    print("   - DB_USER (your PostgreSQL user)")
+                    print("   - DB_PASSWORD (your PostgreSQL password)")
+                    print("   - DB_NAME (your database name)")
+                    print("   OR ensure DATABASE_URL is automatically set by Render")
+                    # Use placeholder that will clearly fail
+                    SQLALCHEMY_DATABASE_URI = "postgresql://MISSING_VARS:MISSING_VARS@MISSING_VARS:5432/MISSING_VARS"
+            else:
+                # PostgreSQL connection with provided variables
+                password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
+                # PostgreSQL uses format: postgresql://user:password@host:port/database
+                # Render provides host without port, SQLAlchemy uses default 5432
+                SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}{password_part}{DB_HOST}/{DB_NAME}"
+                print(f"✅ Using PostgreSQL: {DB_USER}@{DB_HOST}/{DB_NAME}")
         else:
             # MySQL connection (default for local development)
             password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
