@@ -54,7 +54,7 @@ class Config:
             print(f"⚠️ URL encoding warning: {url_err}, using original URL")
         
         SQLALCHEMY_DATABASE_URI = database_url
-            print(f"✅ Using DATABASE_URL from Render")
+        print(f"✅ Using DATABASE_URL from Render")
         # Show first 50 chars (before password) and last 30 chars (after password)
         if '@' in database_url:
             parts = database_url.split('@')
