@@ -33,7 +33,11 @@ class Config:
     DB_NAME = None
     SQLALCHEMY_DATABASE_URI = None
     
-    if database_url and database_url.startswith('postgresql://'):
+    # Also check for postgres:// (without 'ql') - some systems use this
+    if database_url and (database_url.startswith('postgresql://') or database_url.startswith('postgres://')):
+        # Convert postgres:// to postgresql:// if needed
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
         # Use DATABASE_URL directly if provided by Render
         SQLALCHEMY_DATABASE_URI = database_url
         print(f"✅ Using DATABASE_URL from Render")
