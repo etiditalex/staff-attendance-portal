@@ -197,17 +197,56 @@ def index():
 @app.route('/health')
 def health_check():
     """Health check endpoint for debugging"""
+    import os
     try:
         # Test database connection
         db.session.execute(text('SELECT 1'))
+        db.session.commit()
         db_status = "✅ Connected"
+        
+        # Try a simple query to check if tables exist
+        try:
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            user_count = 0
+            if 'users' in tables:
+                try:
+                    user_count = User.query.count()
+                    db_status += f" (Users table: {user_count} users)"
+                except:
+                    db_status += " (Users table exists but query failed)"
+            else:
+                db_status += " (⚠️ Users table missing - run db.create_all())"
+                db_status += f" (Available tables: {', '.join(tables) if tables else 'none'})"
+        except Exception as query_err:
+            db_status += f" (Query test error: {str(query_err)[:100]})"
+            
     except Exception as e:
-        db_status = f"❌ Error: {str(e)}"
+        db_status = f"❌ Connection Error: {str(e)}"
+        db_status += f" [Type: {type(e).__name__}]"
+        try:
+            db.session.rollback()
+        except:
+            pass
+    
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')
+    # Show first 80 chars (hide password)
+    if 'postgresql://' in db_uri or 'postgres://' in db_uri:
+        # Hide password in URI for security
+        import re
+        db_uri_preview = re.sub(r'(postgresql?://[^:]+:)([^@]+)(@)', r'\1***\3', db_uri)
+        db_uri_preview = db_uri_preview[:80] + ('...' if len(db_uri_preview) > 80 else '')
+    else:
+        db_uri_preview = db_uri[:50] + ('...' if len(db_uri) > 50 else '')
     
     return jsonify({
         'status': 'ok',
         'database': db_status,
-        'database_uri': app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50] + '...'  # Hide password
+        'database_uri': db_uri_preview,
+        'has_database_url': bool(os.getenv('DATABASE_URL')),
+        'is_render': bool(os.getenv('PORT') or os.getenv('RENDER')),
+        'env': 'production' if os.getenv('PORT') or os.getenv('RENDER') else 'development'
     })
 
 @app.route('/debug/signup')
