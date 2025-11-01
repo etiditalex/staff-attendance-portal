@@ -21,8 +21,6 @@ services:
     envVars:
       - key: RENDER
         value: "true"
-      - key: PORT
-        generateValue: false
       - key: SECRET_KEY
         generateValue: true
       - key: FLASK_ENV
