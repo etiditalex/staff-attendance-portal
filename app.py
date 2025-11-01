@@ -42,7 +42,14 @@ except Exception as e:
     app.config.from_object(config['development'])
 
 # Initialize database (with auto-table creation)
-init_db(app)
+try:
+    init_db(app)
+    print("✅ Database initialization completed")
+except Exception as e:
+    print(f"⚠️ Database initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    # Continue - database will be initialized later
 
 # Force database initialization on startup (with better error handling)
 def initialize_on_startup():
