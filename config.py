@@ -24,6 +24,13 @@ class Config:
     # Render sets DATABASE_URL for PostgreSQL automatically
     database_url = os.getenv('DATABASE_URL', '')
     
+    # Initialize variables (will be set in if/else below)
+    DB_HOST = None
+    DB_USER = None
+    DB_PASSWORD = None
+    DB_NAME = None
+    SQLALCHEMY_DATABASE_URI = None
+    
     if database_url and database_url.startswith('postgresql://'):
         # Use DATABASE_URL directly if provided by Render
         SQLALCHEMY_DATABASE_URI = database_url
@@ -45,8 +52,6 @@ class Config:
         DB_USER = os.getenv('DB_USER', 'root')
         DB_PASSWORD = os.getenv('DB_PASSWORD', '')
         DB_NAME = os.getenv('DB_NAME', 'attendance_db')
-        
-        # Build SQLALCHEMY_DATABASE_URI later after detecting database type
     
     # SQLAlchemy Configuration
     # Support both MySQL and PostgreSQL
@@ -59,8 +64,9 @@ class Config:
     # Check if DB_HOST looks like a Render PostgreSQL host (contains 'dpg-' or ends with '.render.com')
     # OR if DB_TYPE is explicitly set to postgresql/postgres
     # OR if we're on Render (force PostgreSQL on Render)
-    db_host_lower = DB_HOST.lower() if DB_HOST else ''
+    db_host_lower = (DB_HOST or '').lower()
     is_postgres = (
+        SQLALCHEMY_DATABASE_URI is not None or  # Already using DATABASE_URL (PostgreSQL)
         DB_TYPE in ('postgresql', 'postgres') or
         is_render or  # Force PostgreSQL on Render
         'dpg-' in db_host_lower or 
@@ -73,12 +79,12 @@ class Config:
     # Debug logging
     print(f"🔍 Database Detection:")
     print(f"   DB_TYPE: {DB_TYPE or 'not set'}")
-    print(f"   DB_HOST: {DB_HOST}")
+    print(f"   DB_HOST: {DB_HOST or 'not set'}")
     print(f"   Is Render: {is_render}")
     print(f"   Detected as PostgreSQL: {is_postgres}")
     
-    # Only build URI if we didn't get DATABASE_URL
-    if 'SQLALCHEMY_DATABASE_URI' not in locals():
+    # Build URI if we didn't get DATABASE_URL
+    if SQLALCHEMY_DATABASE_URI is None:
         if is_postgres:
             # PostgreSQL connection
             password_part = f":{DB_PASSWORD}@" if DB_PASSWORD else "@"
