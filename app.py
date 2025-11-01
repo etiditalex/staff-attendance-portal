@@ -178,6 +178,51 @@ def health_check():
         'database_uri': app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50] + '...'  # Hide password
     })
 
+@app.route('/debug/signup')
+def debug_signup():
+    """Debug endpoint to test signup route without errors"""
+    import os
+    try:
+        # Test if we can access current_user
+        user_status = "Not authenticated"
+        if current_user.is_authenticated:
+            user_status = f"Authenticated as {current_user.email}"
+        
+        # Test if template exists
+        try:
+            template_test = "✅ Template accessible"
+            render_template('signup.html')
+        except Exception as e:
+            template_test = f"❌ Template error: {str(e)}"
+        
+        # Test database
+        db_status = "✅ OK"
+        try:
+            User.query.limit(1).all()
+        except Exception as e:
+            db_status = f"❌ Error: {str(e)}"
+        
+        # Check tables
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        
+        return jsonify({
+            'user_status': user_status,
+            'template': template_test,
+            'database': db_status,
+            'tables': tables,
+            'config_loaded': 'production' if os.getenv('PORT') else 'development',
+            'has_users_table': 'users' in tables
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__,
+            'traceback': traceback.format_exc()
+        }), 500
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     """User registration page"""
