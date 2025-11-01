@@ -6,8 +6,10 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (only if not on Render)
+# On Render, environment variables are set by Render, not .env file
+if not os.getenv('RENDER'):
+    load_dotenv()
 
 class Config:
     """Base configuration class"""
@@ -57,8 +59,12 @@ class Config:
     # Support both MySQL and PostgreSQL
     DB_TYPE = os.getenv('DB_TYPE', '').lower()
     
-    # Check if we're on Render (Render sets RENDER environment variable)
-    is_render = os.getenv('RENDER', '').lower() == 'true'
+    # Check if we're on Render
+    # Render sets RENDER=true OR we can detect by PORT environment variable
+    is_render = (
+        os.getenv('RENDER', '').lower() == 'true' or
+        os.getenv('PORT') is not None  # Render always sets PORT
+    )
     
     # Auto-detect PostgreSQL from environment
     # Check if DB_HOST looks like a Render PostgreSQL host (contains 'dpg-' or ends with '.render.com')
