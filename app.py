@@ -153,9 +153,18 @@ def load_user(user_id):
 @app.before_request
 def before_request():
     """Ensure database connection before each request"""
-    # Remove connection test - let SQLAlchemy handle it automatically
-    # The pool_pre_ping will handle connection checks
-    pass
+    # Test connection with retry logic
+    try:
+        db.session.execute(text('SELECT 1'))
+    except Exception as e:
+        print(f"⚠️ Connection check failed in before_request: {e}")
+        try:
+            db.session.rollback()
+            db.session.close()
+            # Force reconnect
+            db.engine.dispose()
+        except:
+            pass
 
 
 # ============= DECORATORS =============
