@@ -192,8 +192,13 @@ def index():
 def health_check():
     """Health check endpoint for debugging"""
     import os
+    import traceback
+    
+    connection_error = None
+    db_status = "❌ Not tested"
+    
     try:
-        # Test database connection
+        # Test database connection with detailed error info
         db.session.execute(text('SELECT 1'))
         db.session.commit()
         db_status = "✅ Connected"
@@ -207,17 +212,22 @@ def health_check():
             if 'users' in tables:
                 try:
                     user_count = User.query.count()
-                    db_status += f" (Users table: {user_count} users)"
-                except:
-                    db_status += " (Users table exists but query failed)"
+                    db_status += f" (Users: {user_count})"
+                except Exception as query_err:
+                    db_status += f" (Query failed: {str(query_err)[:80]})"
             else:
-                db_status += " (⚠️ Users table missing - run db.create_all())"
-                db_status += f" (Available tables: {', '.join(tables) if tables else 'none'})"
+                db_status += " (⚠️ Users table missing)"
+                db_status += f" (Tables: {', '.join(tables) if tables else 'none'})"
         except Exception as query_err:
-            db_status += f" (Query test error: {str(query_err)[:100]})"
+            db_status += f" (Query error: {str(query_err)[:80]})"
             
     except Exception as e:
-        db_status = f"❌ Connection Error: {str(e)}"
+        connection_error = {
+            'message': str(e),
+            'type': type(e).__name__,
+            'traceback': traceback.format_exc()
+        }
+        db_status = f"❌ Connection Error: {str(e)[:150]}"
         db_status += f" [Type: {type(e).__name__}]"
         try:
             db.session.rollback()
@@ -234,14 +244,19 @@ def health_check():
     else:
         db_uri_preview = db_uri[:50] + ('...' if len(db_uri) > 50 else '')
     
-    return jsonify({
-        'status': 'ok',
+    response = {
+        'status': 'ok' if '✅' in db_status else 'error',
         'database': db_status,
         'database_uri': db_uri_preview,
         'has_database_url': bool(os.getenv('DATABASE_URL')),
         'is_render': bool(os.getenv('PORT') or os.getenv('RENDER')),
         'env': 'production' if os.getenv('PORT') or os.getenv('RENDER') else 'development'
-    })
+    }
+    
+    if connection_error:
+        response['connection_error'] = connection_error
+    
+    return jsonify(response)
 
 @app.route('/debug/signup')
 def debug_signup():
