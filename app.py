@@ -186,12 +186,15 @@ def admin_required(f):
 def index():
     """Homepage - redirect based on login status"""
     try:
-        if current_user.is_authenticated:
+        # Check if user is authenticated without triggering exceptions
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            if hasattr(current_user, 'is_admin') and current_user.is_admin():
+                return redirect(url_for('admin_panel'))
             return redirect(url_for('dashboard'))
-        return redirect(url_for('login'))
-    except Exception:
-        # If there's any error, still redirect to login
-        return redirect(url_for('login'))
+    except Exception as e:
+        print(f"⚠️ Index route error: {e}")
+    # Always redirect to login if anything fails
+    return redirect(url_for('login'))
 
 
 @app.route('/health')
@@ -770,7 +773,8 @@ def logout():
 def dashboard():
     """User dashboard showing today's attendance and recent history"""
     try:
-        if current_user.is_admin():
+        # Check if user is admin and redirect - but don't create redirect loop
+        if hasattr(current_user, 'is_admin') and current_user.is_admin():
             return redirect(url_for('admin_panel'))
         
         try:
@@ -850,8 +854,20 @@ def dashboard():
         print(f"❌ Dashboard outer error: {outer_err}")
         import traceback
         traceback.print_exc()
+        db.session.rollback()
         flash('An error occurred. Please try again.', 'danger')
-        return redirect(url_for('login'))
+        # Don't redirect to login if user is authenticated - just show error page
+        try:
+            return render_template('dashboard.html',
+                                 user=current_user if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated else None,
+                                 today_attendance=None,
+                                 recent_attendance=[],
+                                 summary={},
+                                 today=date.today())
+        except:
+            # Last resort - only redirect if we can't render anything
+            logout_user()
+            return redirect(url_for('login'))
 
 
 @app.route('/mark_leave', methods=['POST'])
