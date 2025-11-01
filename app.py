@@ -186,99 +186,99 @@ def signup():
             return redirect(url_for('dashboard'))
         
         if request.method == 'POST':
-        # Get form data
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        phone = request.form.get('phone', '').strip()
-        department = request.form.get('department', '').strip()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        
-        # Validation
-        if not all([name, email, phone, department, password]):
-            flash('All fields are required.', 'danger')
-            return render_template('signup.html')
-        
-        if password != confirm_password:
-            flash('Passwords do not match.', 'danger')
-            return render_template('signup.html')
-        
-        if len(password) < 6:
-            flash('Password must be at least 6 characters long.', 'danger')
-            return render_template('signup.html')
-        
-        # Check if user already exists
-        try:
-            existing_user = User.query.filter_by(email=email).first()
-        except OperationalError:
-            db.session.rollback()
-            existing_user = User.query.filter_by(email=email).first()
-        
-        if existing_user:
-            flash('Email already registered. Please login.', 'warning')
-            return redirect(url_for('login'))
-        
-        # Create new user
-        try:
-            # Ensure tables exist before creating user
+            # Get form data
+            name = request.form.get('name', '').strip()
+            email = request.form.get('email', '').strip().lower()
+            phone = request.form.get('phone', '').strip()
+            department = request.form.get('department', '').strip()
+            password = request.form.get('password', '')
+            confirm_password = request.form.get('confirm_password', '')
+            
+            # Validation
+            if not all([name, email, phone, department, password]):
+                flash('All fields are required.', 'danger')
+                return render_template('signup.html')
+            
+            if password != confirm_password:
+                flash('Passwords do not match.', 'danger')
+                return render_template('signup.html')
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters long.', 'danger')
+                return render_template('signup.html')
+            
+            # Check if user already exists
             try:
-                db.create_all()
-            except:
-                pass  # Tables might already exist
+                existing_user = User.query.filter_by(email=email).first()
+            except OperationalError:
+                db.session.rollback()
+                existing_user = User.query.filter_by(email=email).first()
             
-            new_user = User(
-                name=name,
-                email=email,
-                phone=phone,
-                department=department,
-                role='staff',
-                status='active'
-            )
-            new_user.set_password(password)
-            
-            db.session.add(new_user)
-            db.session.commit()
-            
-            flash('Account created successfully! Please log in.', 'success')
-            return redirect(url_for('login'))
-        
-        except Exception as e:
-            db.session.rollback()
-            # Log the error for debugging (visible in Render logs)
-            error_msg = str(e)
-            error_type = type(e).__name__
-            
-            # Log to console (visible in Render logs)
-            print("=" * 60)
-            print("❌ SIGNUP ERROR")
-            print("=" * 60)
-            print(f"Error Type: {error_type}")
-            print(f"Error Message: {error_msg}")
-            print("=" * 60)
-            import traceback
-            traceback.print_exc()
-            print("=" * 60)
-            
-            # More user-friendly error messages
-            if 'relation' in error_msg.lower() or 'table' in error_msg.lower() or 'does not exist' in error_msg.lower() or 'no such table' in error_msg.lower():
-                # Database table issue - try creating tables
-                try:
-                    print("Attempting to create tables...")
-                    db.create_all()
-                    print("✅ Tables created, retrying signup...")
-                    flash('Database initialized. Please try signing up again.', 'info')
-                except Exception as create_error:
-                    print(f"❌ Failed to create tables: {create_error}")
-                    flash(f'Database error: {str(create_error)[:200]}', 'danger')
-            elif 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower() or 'already exists' in error_msg.lower():
+            if existing_user:
                 flash('Email already registered. Please login.', 'warning')
                 return redirect(url_for('login'))
-            elif 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
-                flash('Database connection error. Please try again in a moment.', 'warning')
-            else:
-                # Show helpful error
-                flash(f'Error: {error_msg[:150]}', 'danger')
-            return render_template('signup.html')
+            
+            # Create new user
+            try:
+                # Ensure tables exist before creating user
+                try:
+                    db.create_all()
+                except:
+                    pass  # Tables might already exist
+                
+                new_user = User(
+                    name=name,
+                    email=email,
+                    phone=phone,
+                    department=department,
+                    role='staff',
+                    status='active'
+                )
+                new_user.set_password(password)
+                
+                db.session.add(new_user)
+                db.session.commit()
+                
+                flash('Account created successfully! Please log in.', 'success')
+                return redirect(url_for('login'))
+            
+            except Exception as e:
+                db.session.rollback()
+                # Log the error for debugging (visible in Render logs)
+                error_msg = str(e)
+                error_type = type(e).__name__
+                
+                # Log to console (visible in Render logs)
+                print("=" * 60)
+                print("❌ SIGNUP ERROR")
+                print("=" * 60)
+                print(f"Error Type: {error_type}")
+                print(f"Error Message: {error_msg}")
+                print("=" * 60)
+                import traceback
+                traceback.print_exc()
+                print("=" * 60)
+                
+                # More user-friendly error messages
+                if 'relation' in error_msg.lower() or 'table' in error_msg.lower() or 'does not exist' in error_msg.lower() or 'no such table' in error_msg.lower():
+                    # Database table issue - try creating tables
+                    try:
+                        print("Attempting to create tables...")
+                        db.create_all()
+                        print("✅ Tables created, retrying signup...")
+                        flash('Database initialized. Please try signing up again.', 'info')
+                    except Exception as create_error:
+                        print(f"❌ Failed to create tables: {create_error}")
+                        flash(f'Database error: {str(create_error)[:200]}', 'danger')
+                elif 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower() or 'already exists' in error_msg.lower():
+                    flash('Email already registered. Please login.', 'warning')
+                    return redirect(url_for('login'))
+                elif 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                    flash('Database connection error. Please try again in a moment.', 'warning')
+                else:
+                    # Show helpful error
+                    flash(f'Error: {error_msg[:150]}', 'danger')
+                return render_template('signup.html')
         
         return render_template('signup.html')
     except Exception as outer_error:
