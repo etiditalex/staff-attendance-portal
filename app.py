@@ -421,8 +421,18 @@ def signup():
 def login():
     """User login page with automatic attendance marking"""
     try:
-        if current_user.is_authenticated:
-            return redirect(url_for('dashboard'))
+        # Check if user is already authenticated - use hasattr to avoid exceptions
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            # Redirect based on role, but catch any errors
+            try:
+                if hasattr(current_user, 'is_admin') and current_user.is_admin():
+                    return redirect(url_for('admin_panel'))
+                return redirect(url_for('dashboard'))
+            except Exception as redirect_err:
+                # If redirect fails, don't create loop - just show login
+                print(f"⚠️ Redirect error in login: {redirect_err}")
+                logout_user()
+                return render_template('login.html')
         
         if request.method == 'POST':
             email = request.form.get('email', '').strip().lower()
