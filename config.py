@@ -132,7 +132,10 @@ class Config:
             if is_render and DB_HOST == 'localhost':
                 print("⚠️ On Render but DB_HOST is localhost - trying DATABASE_URL...")
                 database_url_fallback = os.getenv('DATABASE_URL', '')
-                if database_url_fallback and database_url_fallback.startswith('postgresql://'):
+                if database_url_fallback and (database_url_fallback.startswith('postgresql://') or database_url_fallback.startswith('postgres://')):
+                    # Convert postgres:// to postgresql:// if needed
+                    if database_url_fallback.startswith('postgres://'):
+                        database_url_fallback = database_url_fallback.replace('postgres://', 'postgresql://', 1)
                     SQLALCHEMY_DATABASE_URI = database_url_fallback
                     print(f"✅ Using DATABASE_URL: {database_url_fallback[:60]}...")
                 else:
