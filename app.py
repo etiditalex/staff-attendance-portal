@@ -355,96 +355,96 @@ def login():
             return redirect(url_for('dashboard'))
         
         if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        remember = request.form.get('remember', False)
-        
-        if not email or not password:
-            flash('Please provide both email and password.', 'danger')
-            return render_template('login.html')
-        
-        # Find user (with error handling for lost connections)
-        try:
-            user = User.query.filter_by(email=email).first()
-        except OperationalError:
-            db.session.rollback()
+            email = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
+            remember = request.form.get('remember', False)
+            
+            if not email or not password:
+                flash('Please provide both email and password.', 'danger')
+                return render_template('login.html')
+            
+            # Find user (with error handling for lost connections)
             try:
                 user = User.query.filter_by(email=email).first()
-            except:
-                flash('Database connection error. Please try again.', 'danger')
-                return render_template('login.html')
-        
-        if not user or not user.check_password(password):
-            flash('Invalid email or password.', 'danger')
-            return render_template('login.html')
-        
-        if user.status != 'active':
-            flash('Your account is inactive. Please contact admin.', 'warning')
-            return render_template('login.html')
-        
-        # Log user in
-        login_user(user, remember=remember)
-        
-        # Mark attendance (only for staff, not admin)
-        if not user.is_admin():
-            try:
-                today = date.today()
-                attendance = Attendance.query.filter_by(user_id=user.id, date=today).first()
-                
-                if not attendance:
-                    # Create new attendance record
-                    attendance = Attendance(
-                        user_id=user.id,
-                        date=today,
-                        status='Present',
-                        work_type='Office'
-                    )
-                    db.session.add(attendance)
-                
-                # Mark login time
-                if not attendance.login_time:
-                    attendance.mark_login()
-                    login_time = attendance.login_time
-                    
-                    # Send WhatsApp notification to staff member
-                    try:
-                        whatsapp_service.send_login_notification(user, login_time)
-                    except Exception as e:
-                        print(f"WhatsApp notification error: {e}")
-                    
-                    # Notify managers and directors via email and WhatsApp
-                    try:
-                        # Find all managers and directors
-                        managers = User.query.filter(
-                            User.role.in_(['manager', 'director']),
-                            User.status == 'active'
-                        ).all()
-                        
-                        email_service = get_email_service()
-                        
-                        for manager in managers:
-                            # Send email notification
-                            if email_service:
-                                try:
-                                    email_service.notify_manager_staff_login(manager, user, login_time)
-                                except Exception as e:
-                                    print(f"Email notification error to {manager.name}: {e}")
-                            
-                            # Send WhatsApp notification
-                            try:
-                                whatsapp_service.notify_manager_staff_login(manager, user, login_time)
-                            except Exception as e:
-                                print(f"WhatsApp notification error to manager {manager.name}: {e}")
-                    except Exception as e:
-                        print(f"Manager notification error: {e}")
             except OperationalError:
                 db.session.rollback()
-        
-        flash(f'Welcome back, {user.name}!', 'success')
-        
-        # Redirect to next page or dashboard
-        next_page = request.args.get('next')
-        return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+                try:
+                    user = User.query.filter_by(email=email).first()
+                except:
+                    flash('Database connection error. Please try again.', 'danger')
+                    return render_template('login.html')
+            
+            if not user or not user.check_password(password):
+                flash('Invalid email or password.', 'danger')
+                return render_template('login.html')
+            
+            if user.status != 'active':
+                flash('Your account is inactive. Please contact admin.', 'warning')
+                return render_template('login.html')
+            
+            # Log user in
+            login_user(user, remember=remember)
+            
+            # Mark attendance (only for staff, not admin)
+            if not user.is_admin():
+                try:
+                    today = date.today()
+                    attendance = Attendance.query.filter_by(user_id=user.id, date=today).first()
+                    
+                    if not attendance:
+                        # Create new attendance record
+                        attendance = Attendance(
+                            user_id=user.id,
+                            date=today,
+                            status='Present',
+                            work_type='Office'
+                        )
+                        db.session.add(attendance)
+                    
+                    # Mark login time
+                    if not attendance.login_time:
+                        attendance.mark_login()
+                        login_time = attendance.login_time
+                        
+                        # Send WhatsApp notification to staff member
+                        try:
+                            whatsapp_service.send_login_notification(user, login_time)
+                        except Exception as e:
+                            print(f"WhatsApp notification error: {e}")
+                        
+                        # Notify managers and directors via email and WhatsApp
+                        try:
+                            # Find all managers and directors
+                            managers = User.query.filter(
+                                User.role.in_(['manager', 'director']),
+                                User.status == 'active'
+                            ).all()
+                            
+                            email_service = get_email_service()
+                            
+                            for manager in managers:
+                                # Send email notification
+                                if email_service:
+                                    try:
+                                        email_service.notify_manager_staff_login(manager, user, login_time)
+                                    except Exception as e:
+                                        print(f"Email notification error to {manager.name}: {e}")
+                                
+                                # Send WhatsApp notification
+                                try:
+                                    whatsapp_service.notify_manager_staff_login(manager, user, login_time)
+                                except Exception as e:
+                                    print(f"WhatsApp notification error to manager {manager.name}: {e}")
+                        except Exception as e:
+                            print(f"Manager notification error: {e}")
+                except OperationalError:
+                    db.session.rollback()
+            
+            flash(f'Welcome back, {user.name}!', 'success')
+            
+            # Redirect to next page or dashboard
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
         
         return render_template('login.html')
     except Exception as e:
