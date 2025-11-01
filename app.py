@@ -13,7 +13,14 @@ import io
 
 # Local imports
 from config import config
-from models.db import db, User, Attendance, Notification, WebAuthnCredential, init_db
+from models.db import db, User, Attendance, Notification, init_db
+# WebAuthn import (optional - app works without it)
+try:
+    from models.db import WebAuthnCredential
+except ImportError:
+    WebAuthnCredential = None
+    print("⚠️ WebAuthnCredential model not available")
+
 from utils.whatsapp import init_whatsapp_service, whatsapp_service
 from utils.email import init_email_service, get_email_service
 
@@ -381,6 +388,8 @@ def webauthn_register_options():
         return jsonify(options)
     except Exception as e:
         print(f"WebAuthn registration options error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
 
@@ -388,6 +397,8 @@ def webauthn_register_options():
 @login_required
 def webauthn_register():
     """Verify and store WebAuthn credential"""
+    if not WebAuthnCredential:
+        return jsonify({'error': 'WebAuthn not available'}), 503
     try:
         from utils.webauthn import verify_registration
         data = request.get_json()
@@ -405,12 +416,16 @@ def webauthn_register():
             
     except Exception as e:
         print(f"WebAuthn registration error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
 
 @app.route('/webauthn/login/options', methods=['POST'])
 def webauthn_login_options():
     """Generate WebAuthn authentication options"""
+    if not WebAuthnCredential:
+        return jsonify({'error': 'WebAuthn not available'}), 503
     try:
         from utils.webauthn import create_authentication_options
         data = request.get_json()
@@ -428,12 +443,16 @@ def webauthn_login_options():
         
     except Exception as e:
         print(f"WebAuthn login options error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
 
 @app.route('/webauthn/login', methods=['POST'])
 def webauthn_login():
     """Verify WebAuthn authentication and log user in"""
+    if not WebAuthnCredential:
+        return jsonify({'error': 'WebAuthn not available'}), 503
     try:
         from utils.webauthn import verify_authentication
         
@@ -522,6 +541,8 @@ def webauthn_login():
 @login_required
 def webauthn_list_credentials():
     """Get list of registered biometric credentials for current user"""
+    if not WebAuthnCredential:
+        return jsonify({'error': 'WebAuthn not available'}), 503
     credentials = WebAuthnCredential.query.filter_by(user_id=current_user.id).all()
     return jsonify([
         {
@@ -538,6 +559,8 @@ def webauthn_list_credentials():
 @login_required
 def webauthn_delete_credential(credential_id):
     """Delete a biometric credential"""
+    if not WebAuthnCredential:
+        return jsonify({'error': 'WebAuthn not available'}), 503
     credential = WebAuthnCredential.query.filter_by(
         id=credential_id,
         user_id=current_user.id
