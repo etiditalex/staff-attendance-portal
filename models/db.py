@@ -93,17 +93,45 @@ class User(UserMixin, db.Model):
         from sqlalchemy import func
         from datetime import timedelta
         
-        start_date = date.today() - timedelta(days=days-1)
-        
-        summary = db.session.query(
-            Attendance.status,
-            func.count(Attendance.id).label('count')
-        ).filter(
-            Attendance.user_id == self.id,
-            Attendance.date >= start_date
-        ).group_by(Attendance.status).all()
-        
-        return {status: count for status, count in summary}
+        try:
+            start_date = date.today() - timedelta(days=days-1)
+            
+            # Get all attendance records in the period
+            records = Attendance.query.filter(
+                Attendance.user_id == self.id,
+                Attendance.date >= start_date
+            ).all()
+            
+            # Count by status
+            summary = {
+                'total_days': len(records),
+                'present_days': 0,
+                'remote_days': 0,
+                'leave_days': 0,
+                'absent_days': 0
+            }
+            
+            for record in records:
+                if record.status == 'Present' and record.work_type == 'Remote':
+                    summary['remote_days'] += 1
+                elif record.status == 'Present':
+                    summary['present_days'] += 1
+                elif record.status == 'Leave':
+                    summary['leave_days'] += 1
+                elif record.status == 'Absent':
+                    summary['absent_days'] += 1
+            
+            return summary
+        except Exception as e:
+            # Return empty summary if query fails
+            print(f"⚠️ Error getting attendance summary: {e}")
+            return {
+                'total_days': 0,
+                'present_days': 0,
+                'remote_days': 0,
+                'leave_days': 0,
+                'absent_days': 0
+            }
     
     def __repr__(self):
         return f'<User {self.email}>'
