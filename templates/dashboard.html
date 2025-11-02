@@ -123,19 +123,19 @@
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-check-circle text-success"></i> Present</span>
-                            <span class="badge bg-success rounded-pill">{{ summary.get('Present', 0) }}</span>
+                            <span class="badge bg-success rounded-pill">{{ summary.get('present_days', 0) }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-house text-primary"></i> Remote</span>
-                            <span class="badge bg-primary rounded-pill">{{ summary.get('Remote', 0) }}</span>
+                            <span class="badge bg-primary rounded-pill">{{ summary.get('remote_days', 0) }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-calendar-x text-warning"></i> Leave</span>
-                            <span class="badge bg-warning rounded-pill">{{ summary.get('Leave', 0) }}</span>
+                            <span class="badge bg-warning rounded-pill">{{ summary.get('leave_days', 0) }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-x-circle text-danger"></i> Absent</span>
-                            <span class="badge bg-danger rounded-pill">{{ summary.get('Absent', 0) }}</span>
+                            <span class="badge bg-danger rounded-pill">{{ summary.get('absent_days', 0) }}</span>
                         </li>
                     </ul>
                 </div>

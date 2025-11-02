@@ -874,14 +874,23 @@ def dashboard():
         flash('An error occurred. Please try again.', 'danger')
         # Don't redirect to login if user is authenticated - just show error page
         try:
+            # Provide safe defaults
+            safe_summary = {
+                'total_days': 0,
+                'present_days': 0,
+                'remote_days': 0,
+                'leave_days': 0,
+                'absent_days': 0
+            }
             return render_template('dashboard.html',
                                  user=current_user if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated else None,
                                  today_attendance=None,
                                  recent_attendance=[],
-                                 summary={},
+                                 summary=safe_summary,
                                  today=date.today())
-        except:
+        except Exception as render_err:
             # Last resort - only redirect if we can't render anything
+            print(f"❌ Failed to render dashboard even with safe defaults: {render_err}")
             logout_user()
             return redirect(url_for('login'))
 
