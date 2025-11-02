@@ -860,11 +860,19 @@ def dashboard():
             traceback.print_exc()
             db.session.rollback()
             flash('Error loading dashboard. Please try again.', 'warning')
+            # Provide safe default summary
+            safe_summary = {
+                'total_days': 0,
+                'present_days': 0,
+                'remote_days': 0,
+                'leave_days': 0,
+                'absent_days': 0
+            }
             return render_template('dashboard.html',
                                  user=current_user,
                                  today_attendance=None,
                                  recent_attendance=[],
-                                 summary={},
+                                 summary=safe_summary,
                                  today=date.today())
     except Exception as outer_err:
         print(f"❌ Dashboard outer error: {outer_err}")
